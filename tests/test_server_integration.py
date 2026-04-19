@@ -25,19 +25,18 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_request_is_passed_directly(self):
         server = self._import_server()
-        from advanced_fetch_mcp.dsl import AdvancedFetchParams
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            mode="dynamic",
-            markdownify=False,
-            scope="body",
-            strip=[".ad"],
-            keep_media=True,
-            max_length=123,
-            refresh_cache=True,
-        )
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(request=request, ctx=object())
+            result = await server.advanced_fetch(
+                ctx=object(),
+                url="https://example.com",
+                mode="dynamic",
+                markdownify=False,
+                scope="body",
+                strip=[".ad"],
+                keep_media=True,
+                max_length=123,
+                refresh_cache=True,
+            )
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]
         self.assertEqual(passed_request.url, "https://example.com")
@@ -51,10 +50,12 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_evaluate_js_request_is_valid(self):
         server = self._import_server()
-        from advanced_fetch_mcp.dsl import AdvancedFetchParams
-        request = AdvancedFetchParams(url="https://example.com", evaluateJS="return document.title;")
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(request=request, ctx=object())
+            result = await server.advanced_fetch(
+                ctx=object(),
+                url="https://example.com",
+                evaluateJS="return document.title;",
+            )
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]
         self.assertEqual(passed_request.evaluateJS, "return document.title;")
