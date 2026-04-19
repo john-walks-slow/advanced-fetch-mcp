@@ -10,14 +10,6 @@ from .browser import browser_manager
 from .params import (
     AdvancedFetchParams,
     CursorParam,
-    DEFAULT_FIND_WITH_REGEX,
-    DEFAULT_MODE,
-    DEFAULT_OUTPUT_FORMAT,
-    DEFAULT_REFRESH_CACHE,
-    DEFAULT_REQUIRE_USER_INTERVENTION,
-    DEFAULT_STRIP_SELECTORS,
-    DEFAULT_STRATEGY,
-    DEFAULT_WAIT_FOR,
     EvaluateJsParam,
     ExtractPromptParam,
     FindInPageParam,
@@ -33,7 +25,7 @@ from .params import (
     UrlParam,
     WaitForParam,
 )
-from .settings import DEFAULT_MAX_LENGTH, ENV_FILE
+from .settings import ENV_FILE
 from .workflow import execute_advanced_fetch
 
 load_dotenv(ENV_FILE)
@@ -45,41 +37,27 @@ mcp = FastMCP("AdvancedFetchMCP")
 async def advanced_fetch(
     ctx: Context,
     url: UrlParam,
-    mode: ModeParam = DEFAULT_MODE,
-    wait_for: WaitForParam = DEFAULT_WAIT_FOR,
-    timeout: TimeoutParam = None,
-    output_format: OutputFormatParam = DEFAULT_OUTPUT_FORMAT,
-    strategy: StrategyParam = DEFAULT_STRATEGY,
-    strip_selectors: StripSelectorsParam = list(DEFAULT_STRIP_SELECTORS),
-    cursor: CursorParam = None,
-    max_length: MaxLengthParam = DEFAULT_MAX_LENGTH,
-    find_in_page: FindInPageParam = None,
-    find_with_regex: FindWithRegexParam = DEFAULT_FIND_WITH_REGEX,
-    extract_prompt: ExtractPromptParam = None,
-    evaluate_js: EvaluateJsParam = None,
-    require_user_intervention: RequireInterventionParam = (
-        DEFAULT_REQUIRE_USER_INTERVENTION
-    ),
-    refresh_cache: RefreshCacheParam = DEFAULT_REFRESH_CACHE,
+    mode: ModeParam,
+    wait_for: WaitForParam,
+    timeout: TimeoutParam,
+    output_format: OutputFormatParam,
+    strategy: StrategyParam,
+    strip_selectors: StripSelectorsParam,
+    cursor: CursorParam,
+    max_length: MaxLengthParam,
+    find_in_page: FindInPageParam,
+    find_with_regex: FindWithRegexParam,
+    extract_prompt: ExtractPromptParam,
+    evaluate_js: EvaluateJsParam,
+    require_user_intervention: RequireInterventionParam,
+    refresh_cache: RefreshCacheParam,
 ) -> Dict[str, Any]:
     """网页抓取工具。"""
-    request = AdvancedFetchParams(
-        url=url,
-        mode=mode,
-        wait_for=wait_for,
-        timeout=timeout,
-        output_format=output_format,
-        strategy=strategy,
-        strip_selectors=strip_selectors,
-        cursor=cursor,
-        max_length=max_length,
-        find_in_page=find_in_page,
-        find_with_regex=find_with_regex,
-        extract_prompt=extract_prompt,
-        evaluate_js=evaluate_js,
-        require_user_intervention=require_user_intervention,
-        refresh_cache=refresh_cache,
-    )
+    params_dict = {
+        k: v for k, v in locals().items()
+        if k in AdvancedFetchParams.model_fields
+    }
+    request = AdvancedFetchParams.model_validate(params_dict)
     return await execute_advanced_fetch(ctx=ctx, request=request)
 
 

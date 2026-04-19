@@ -4,6 +4,8 @@ import types
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from advanced_fetch_mcp.params import AdvancedFetchParams
+
 
 class _DummyFastMCP:
     def __init__(self, name):
@@ -37,16 +39,20 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_request_is_passed_directly(self):
         server = self._import_server()
+        # 构建完整参数，验证传递正确性
+        params = AdvancedFetchParams(
+            url="https://example.com",
+            mode="dynamic",
+            output_format="html",
+            strategy="none",
+            strip_selectors=[".ad"],
+            max_length=123,
+            refresh_cache=True,
+        )
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
             result = await server.advanced_fetch(
                 ctx=object(),
-                url="https://example.com",
-                mode="dynamic",
-                output_format="html",
-                strategy="none",
-                strip_selectors=[".ad"],
-                max_length=123,
-                refresh_cache=True,
+                **params.model_dump(),
             )
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]
@@ -60,11 +66,15 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_evaluate_js_request_is_valid(self):
         server = self._import_server()
+        # 构建参数，验证 evaluate_js 互斥约束
+        params = AdvancedFetchParams(
+            url="https://example.com",
+            evaluate_js="return document.title;",
+        )
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
             result = await server.advanced_fetch(
                 ctx=object(),
-                url="https://example.com",
-                evaluate_js="return document.title;",
+                **params.model_dump(),
             )
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]

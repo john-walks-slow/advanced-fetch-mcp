@@ -11,27 +11,18 @@ ExtractStrategy = Literal["strict", "loose", "none"]
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["read", "find", "extract", "eval"]
 
-DEFAULT_MODE: FetchMode = "dynamic"
-DEFAULT_WAIT_FOR = 0.0
-DEFAULT_OUTPUT_FORMAT: OutputFormat = "markdown"
-DEFAULT_STRATEGY: ExtractStrategy = "strict"
-DEFAULT_STRIP_SELECTORS = MEDIA_REMOVE_TAGS
-DEFAULT_FIND_WITH_REGEX = False
-DEFAULT_REQUIRE_USER_INTERVENTION = False
-DEFAULT_REFRESH_CACHE = False
-
 UrlParam = Annotated[str, Field(description="目标网址。")]
 ModeParam = Annotated[
     FetchMode,
     Field(
-        default=DEFAULT_MODE,
+        default="dynamic",
         description="页面抓取方式。dynamic 使用 Playwright；static 直接获取页面响应。",
     ),
 ]
 WaitForParam = Annotated[
     float,
     Field(
-        default=DEFAULT_WAIT_FOR,
+        default=0.0,
         ge=0,
         description="dynamic 模式下，networkidle 后额外等待秒数（适合有懒加载内容的页面）。",
     ),
@@ -43,14 +34,14 @@ TimeoutParam = Annotated[
 OutputFormatParam = Annotated[
     OutputFormat,
     Field(
-        default=DEFAULT_OUTPUT_FORMAT,
+        default="markdown",
         description="输出格式。markdown 返回 Markdown；html 返回原始 HTML。",
     ),
 ]
 StrategyParam = Annotated[
     ExtractStrategy,
     Field(
-        default=DEFAULT_STRATEGY,
+        default="strict",
         description="提取策略。strict 优先提取最小正文；loose 优先避免误删；none 返回完整 body。",
     ),
 ]
@@ -82,7 +73,7 @@ FindInPageParam = Annotated[
 FindWithRegexParam = Annotated[
     bool,
     Field(
-        default=DEFAULT_FIND_WITH_REGEX,
+        default=False,
         description="是否把 find_in_page 按正则表达式处理。",
     ),
 ]
@@ -103,13 +94,13 @@ EvaluateJsParam = Annotated[
 RequireInterventionParam = Annotated[
     bool,
     Field(
-        default=DEFAULT_REQUIRE_USER_INTERVENTION,
+        default=False,
         description="需要登录/过验证码时设为 true，打开可见浏览器让用户手动操作，用户操作完成后自动继续。",
     ),
 ]
 RefreshCacheParam = Annotated[
     bool,
-    Field(default=DEFAULT_REFRESH_CACHE, description="是否忽略已有缓存重新抓取。")
+    Field(default=False, description="是否忽略已有缓存重新抓取。")
 ]
 
 
@@ -117,22 +108,20 @@ class AdvancedFetchParams(BaseModel):
     model_config = ConfigDict(protected_namespaces=(), extra="forbid")
 
     url: UrlParam
-    mode: ModeParam = DEFAULT_MODE
-    wait_for: WaitForParam = DEFAULT_WAIT_FOR
-    timeout: TimeoutParam = None
-    output_format: OutputFormatParam = DEFAULT_OUTPUT_FORMAT
-    strategy: StrategyParam = DEFAULT_STRATEGY
+    mode: ModeParam
+    wait_for: WaitForParam
+    timeout: TimeoutParam
+    output_format: OutputFormatParam
+    strategy: StrategyParam
     strip_selectors: StripSelectorsParam
-    cursor: CursorParam = None
-    max_length: MaxLengthParam = DEFAULT_MAX_LENGTH
-    find_in_page: FindInPageParam = None
-    find_with_regex: FindWithRegexParam = DEFAULT_FIND_WITH_REGEX
-    extract_prompt: ExtractPromptParam = None
-    evaluate_js: EvaluateJsParam = None
-    require_user_intervention: RequireInterventionParam = (
-        DEFAULT_REQUIRE_USER_INTERVENTION
-    )
-    refresh_cache: RefreshCacheParam = DEFAULT_REFRESH_CACHE
+    cursor: CursorParam
+    max_length: MaxLengthParam
+    find_in_page: FindInPageParam
+    find_with_regex: FindWithRegexParam
+    extract_prompt: ExtractPromptParam
+    evaluate_js: EvaluateJsParam
+    require_user_intervention: RequireInterventionParam
+    refresh_cache: RefreshCacheParam
 
     @property
     def operation(self) -> Operation:
@@ -181,6 +170,6 @@ class AdvancedFetchParams(BaseModel):
 
 
 class RenderConfig(BaseModel):
-    output_format: OutputFormat = DEFAULT_OUTPUT_FORMAT
-    strategy: ExtractStrategy = DEFAULT_STRATEGY
-    strip_selectors: list[str] = list(DEFAULT_STRIP_SELECTORS)
+    output_format: OutputFormatParam
+    strategy: StrategyParam
+    strip_selectors: StripSelectorsParam
