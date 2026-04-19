@@ -52,10 +52,9 @@ async def advanced_fetch(
     require_user_intervention: RequireInterventionParam,
     refresh_cache: RefreshCacheParam,
 ) -> Dict[str, Any]:
-    """网页抓取工具。"""
+    """快速、强大、节省 Token 的动态网页抓取工具。"""
     params_dict = {
-        k: v for k, v in locals().items()
-        if k in AdvancedFetchParams.model_fields
+        k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields
     }
     request = AdvancedFetchParams.model_validate(params_dict)
     return await execute_advanced_fetch(ctx=ctx, request=request)

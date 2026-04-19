@@ -27,3 +27,8 @@ py-modules = ["advanced_fetch_entry"]
 
 [tool.setuptools.packages.find]
 include = ["advanced_fetch_mcp*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

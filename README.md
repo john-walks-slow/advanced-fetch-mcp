@@ -13,13 +13,6 @@
 - **登录态持久化**：浏览器 profile 存到 `~/.advanced-fetch-profile`，登录一次后续请求自动保持登录态。
 - 支持 HTTP_PROXY / HTTPS_PROXY 代理
 
-## 安装
-
-```bash
-uv sync
-uv run playwright install
-```
-
 ## MCP Client 配置
 
 ```json
@@ -46,8 +39,6 @@ uv run playwright install
 }
 ```
 
-浏览器 profile 默认存到 `~/.advanced-fetch-profile`。
-
 ## 参数
 
 | 参数                        | 说明                                                                                              |
@@ -58,7 +49,7 @@ uv run playwright install
 | `timeout`                   | 抓取超时秒数，超时后返回当前已加载内容。                                                          |
 | `output_format`             | 输出格式。`markdown` 返回 Markdown；`html` 返回原始 HTML。                                        |
 | `strategy`                  | 提取策略。strict 提取最小正文；loose 优先避免误删；none 返回完整 body。                           |
-| `strip_selectors`           | 按 CSS selector 剔除节点。默认剔除媒体标签（video/audio/img 等）。传空列表保留全部。             |
+| `strip_selectors`           | 按 CSS selector 剔除节点。默认剔除媒体标签（video/audio/img 等）。传空列表保留全部。              |
 | `cursor`                    | 文本位置偏移。从该位置续读或继续搜索。（受输出格式和提取策略影响）                                |
 | `max_length`                | 结果长度上限。                                                                                    |
 | `find_in_page`              | 页面内搜索，返回 matches 列表，适合在长页面中定位关键部分。                                       |
@@ -124,6 +115,13 @@ require_user_intervention: true
 ## 缓存
 
 最近抓取的网站会按 url + mode 缓存，下次访问、查找无需重新抓取。`require_user_intervention` 和 `evaluate_js` 无视缓存。
+
+## 本地安装
+
+```bash
+uv sync
+uv run playwright install
+```
 
 ## 测试
 

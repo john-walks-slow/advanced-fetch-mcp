@@ -72,11 +72,11 @@ uv run playwright install
 | `wait_for`                  | dynamic 模式下，networkidle 后额外等待秒数（适合有懒加载内容的页面）。                            |
 | `timeout`                   | 抓取超时秒数，超时后返回当前已加载内容。                                                          |
 | `output_format`             | 输出格式。`markdown` 返回 Markdown；`html` 返回原始 HTML。                                        |
-| `strategy`                  | 提取策略。strict 优先提取最小正文；loose 优先避免误删；none 返回完整 body。                       |
-| `keep_media`                | 是否保留图片、视频、音频、SVG 等媒体节点。                                                        |
-| `cursor`                    | 文本位置偏移。从该位置续读或继续搜索。                                                            |
-| `max_length`                | 文本结果长度上限。                                                                                |
-| `find_in_page`              | 搜索关键词。返回 matches 列表，适合在长页面中定位关键部分。                                       |
+| `strategy`                  | 提取策略。strict 提取最小正文；loose 优先避免误删；none 返回完整 body。                           |
+| `strip_selectors`           | 按 CSS selector 剔除节点。默认剔除媒体标签（video/audio/img 等）。传空列表保留全部。             |
+| `cursor`                    | 文本位置偏移。从该位置续读或继续搜索。（受输出格式和提取策略影响）                                |
+| `max_length`                | 结果长度上限。                                                                                    |
+| `find_in_page`              | 页面内搜索，返回 matches 列表，适合在长页面中定位关键部分。                                       |
 | `find_with_regex`           | 是否把 find_in_page 按正则表达式处理。                                                            |
 | `extract_prompt`            | 提取提示词。提供后，调用 LLM 整理内容，返回提取后的结果。可以避免原始页面内容污染调用方的上下文。 |
 | `evaluate_js`               | 在页面上下文中执行 JavaScript，返回脚本结果。                                                     |
