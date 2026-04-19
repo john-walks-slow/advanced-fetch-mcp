@@ -12,6 +12,7 @@ from .browser import browser_manager
 from .detection import build_intervention_script, wait_for_intervention_end
 from .dsl import FetchMode
 from .settings import (
+    DEFAULT_TIMEOUT_SECONDS,
     NAVIGATION_TIMEOUT_MS,
     NETWORK_IDLE_TIMEOUT_MS,
     STATIC_FETCH_TIMEOUT_SECONDS,
@@ -31,52 +32,31 @@ class FetchResult:
     intervention_ended_by: Optional[str] = None
 
 
-_FETCH_CACHE: dict[tuple[str, FetchMode, float, bool], Tuple[str, str]] = {}
+_FETCH_CACHE: dict[tuple[str, FetchMode], Tuple[str, str]] = {}
 _FUNCTION_LIKE_SCRIPT_RE = re.compile(
     r"^\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)"
 )
 
 
-def _cache_key(
-    url: str,
-    mode: FetchMode,
-    wait_for: float,
-    require_user_intervention: bool,
-) -> tuple[str, FetchMode, float, bool]:
-    return (url, mode, wait_for, require_user_intervention)
+def _cache_key(url: str, mode: FetchMode) -> tuple[str, FetchMode]:
+    return (url, mode)
 
 
-def get_cached_fetch(
-    url: str,
-    mode: FetchMode,
-    wait_for: float,
-    require_user_intervention: bool,
-) -> Optional[Tuple[str, str]]:
-    return _FETCH_CACHE.get(
-        _cache_key(url, mode, wait_for, require_user_intervention)
-    )
+def get_cached_fetch(url: str, mode: FetchMode) -> Optional[Tuple[str, str]]:
+    return _FETCH_CACHE.get(_cache_key(url, mode))
 
 
-def store_cached_fetch(
-    url: str,
-    mode: FetchMode,
-    wait_for: float,
-    require_user_intervention: bool,
-    final_url: str,
-    html: str,
-) -> None:
-    _FETCH_CACHE[_cache_key(url, mode, wait_for, require_user_intervention)] = (
-        final_url,
-        html,
-    )
+def store_cached_fetch(url: str, mode: FetchMode, final_url: str, html: str) -> None:
+    _FETCH_CACHE[_cache_key(url, mode)] = (final_url, html)
 
 
-def static_fetch(url: str) -> FetchResult:
+def static_fetch(url: str, timeout: Optional[float] = None) -> FetchResult:
+    effective_timeout = timeout if timeout is not None else STATIC_FETCH_TIMEOUT_SECONDS
     try:
         response = requests.get(
             url,
             headers={"User-Agent": USER_AGENT},
-            timeout=STATIC_FETCH_TIMEOUT_SECONDS,
+            timeout=effective_timeout,
         )
         response.raise_for_status()
         return FetchResult(html=response.text, final_url=response.url)
@@ -117,7 +97,14 @@ async def dynamic_fetch(
     url: str,
     wait_for: float = 0,
     require_user_intervention: bool = False,
+    timeout: Optional[float] = None,
 ) -> FetchResult:
+    effective_timeout_ms = (
+        int(timeout * 1000) if timeout is not None else NAVIGATION_TIMEOUT_MS
+    )
+    network_idle_timeout_ms = (
+        int(timeout * 1000) if timeout is not None else NETWORK_IDLE_TIMEOUT_MS
+    )
     context = None
     page: Optional[Page] = None
     timed_out = False
@@ -138,7 +125,7 @@ async def dynamic_fetch(
             await page.goto(
                 url,
                 wait_until="domcontentloaded",
-                timeout=NAVIGATION_TIMEOUT_MS,
+                timeout=effective_timeout_ms,
             )
             goto_completed = True
         except PlaywrightTimeoutError:
@@ -154,7 +141,7 @@ async def dynamic_fetch(
             try:
                 await page.wait_for_load_state(
                     "networkidle",
-                    timeout=NETWORK_IDLE_TIMEOUT_MS,
+                    timeout=network_idle_timeout_ms,
                 )
             except PlaywrightTimeoutError:
                 timed_out = True
@@ -190,10 +177,11 @@ async def fetch_url(
     mode: FetchMode,
     wait_for: float,
     require_user_intervention: bool,
+    timeout: Optional[float] = None,
 ) -> FetchResult:
     if mode == "dynamic" or require_user_intervention:
-        return await dynamic_fetch(url, wait_for, require_user_intervention)
-    return static_fetch(url)
+        return await dynamic_fetch(url, wait_for, require_user_intervention, timeout)
+    return static_fetch(url, timeout)
 
 
 async def evaluate_script_on_page(
@@ -202,7 +190,14 @@ async def evaluate_script_on_page(
     wait_for: float,
     require_user_intervention: bool,
     script: str,
+    timeout: Optional[float] = None,
 ) -> Any:
+    effective_timeout_ms = (
+        int(timeout * 1000) if timeout is not None else NAVIGATION_TIMEOUT_MS
+    )
+    network_idle_timeout_ms = (
+        int(timeout * 1000) if timeout is not None else NETWORK_IDLE_TIMEOUT_MS
+    )
     page: Optional[Page] = None
     context = None
 
@@ -217,14 +212,14 @@ async def evaluate_script_on_page(
         await page.goto(
             url,
             wait_until="domcontentloaded",
-            timeout=NAVIGATION_TIMEOUT_MS,
+            timeout=effective_timeout_ms,
         )
         if wait_for > 0:
             await asyncio.sleep(wait_for)
         try:
             await page.wait_for_load_state(
                 "networkidle",
-                timeout=NETWORK_IDLE_TIMEOUT_MS,
+                timeout=network_idle_timeout_ms,
             )
         except Exception:
             pass

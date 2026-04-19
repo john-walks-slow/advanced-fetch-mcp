@@ -4,7 +4,13 @@ import json
 from typing import Any, Dict, Tuple
 
 from .dsl import AdvancedFetchParams
-from .extract import build_view_config, continue_in_text, render_view, search_in_text
+from .extract import (
+    build_view_config,
+    continue_in_text,
+    encode_cursor,
+    render_view,
+    search_in_text,
+)
 from .fetch import (
     FetchResult,
     evaluate_script_on_page,
@@ -45,7 +51,9 @@ def _truncate_text_middle(value: str, max_length: int) -> Tuple[str, bool]:
     tail = max(1, remaining - head)
     if head + tail > len(value):
         tail = max(0, len(value) - head)
-    return value[:head] + marker + value[-tail:] if tail else value[:head] + marker, True
+    return (
+        value[:head] + marker + value[-tail:] if tail else value[:head] + marker
+    ), True
 
 
 def _build_warnings(fetch_result: FetchResult) -> list[str]:
@@ -69,6 +77,7 @@ def _build_public_result(
     result_payload: Any,
     warnings: list[str],
     truncated: bool,
+    next_cursor: int | None = None,
     find_result: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {
@@ -84,6 +93,8 @@ def _build_public_result(
         result["intervention_ended_by"] = fetch_result.intervention_ended_by
     if truncated:
         result["truncated"] = True
+    if next_cursor is not None:
+        result["next_cursor"] = next_cursor
     if warnings:
         result["warnings"] = warnings
 
@@ -95,31 +106,21 @@ def _build_public_result(
             result["matches_total"] = find_result["matches_total"]
         if find_result.get("matches_truncated"):
             result["matches_truncated"] = True
-        if find_result.get("next_cursor") is not None:
-            result["next_cursor"] = find_result["next_cursor"]
 
     return result
 
 
 async def execute_advanced_fetch(
     *,
-    url: str,
     ctx: Any,
     request: AdvancedFetchParams,
 ) -> Dict[str, Any]:
+    url = request.url
     effective_max_length = request.max_length or DEFAULT_MAX_LENGTH
 
-    cache_allowed = request.evaluateJS is None
-    cached = (
-        get_cached_fetch(
-            url,
-            request.mode,
-            request.wait_for,
-            request.require_user_intervention,
-        )
-        if cache_allowed and not request.refresh_cache
-        else None
-    )
+    # require_user_intervention 或 evaluateJS 强制刷新缓存
+    skip_cache = request.require_user_intervention or request.evaluateJS is not None or request.refresh_cache
+    cached = get_cached_fetch(url, request.mode) if not skip_cache else None
 
     if cached is not None:
         final_url, html = cached
@@ -131,16 +132,11 @@ async def execute_advanced_fetch(
             request.mode,
             request.wait_for,
             request.require_user_intervention,
+            request.timeout,
         )
-        if request.evaluateJS is None:
-            store_cached_fetch(
-                url,
-                request.mode,
-                request.wait_for,
-                request.require_user_intervention,
-                fetch_result.final_url,
-                fetch_result.html,
-            )
+        # 只有非 intervention、非 evaluateJS 时才写缓存
+        if not request.require_user_intervention and request.evaluateJS is None:
+            store_cached_fetch(url, request.mode, fetch_result.final_url, fetch_result.html)
 
     warnings = _build_warnings(fetch_result)
 
@@ -150,6 +146,7 @@ async def execute_advanced_fetch(
             wait_for=request.wait_for,
             require_user_intervention=request.require_user_intervention,
             script=request.evaluateJS,
+            timeout=request.timeout,
         )
         result_text, truncated = _truncate_text_middle(
             _serialize_result_value(value),
@@ -165,20 +162,16 @@ async def execute_advanced_fetch(
     view = build_view_config(request.model_dump())
     rendered = render_view(fetch_result.html, view)
 
+    # find 搜索
     if request.find_in_page is not None:
-        if request.find_in_page.query is not None:
-            find_result = search_in_text(
-                rendered,
-                request.find_in_page.query,
-                effective_max_length,
-                request.find_in_page.regex,
-            )
-        else:
-            find_result = continue_in_text(
-                rendered,
-                request.find_in_page.cursor or "",
-                effective_max_length,
-            )
+        text_offset = request.cursor or 0
+        find_result = search_in_text(
+            rendered,
+            request.find_in_page,
+            effective_max_length,
+            request.find_with_regex,
+            text_offset,
+        )
         if find_result["matches_truncated"]:
             warnings.append(FIND_MATCHES_WARNING)
         return _build_public_result(
@@ -186,7 +179,23 @@ async def execute_advanced_fetch(
             result_payload=find_result["text"],
             warnings=warnings,
             truncated=False,
+            next_cursor=find_result.get("next_cursor"),
             find_result=find_result,
+        )
+
+    # cursor 续读文本
+    if request.cursor is not None:
+        continue_result = continue_in_text(
+            rendered,
+            request.cursor,
+            effective_max_length,
+        )
+        return _build_public_result(
+            fetch_result=fetch_result,
+            result_payload=continue_result["text"],
+            warnings=warnings,
+            truncated=False,
+            next_cursor=continue_result.get("next_cursor"),
         )
 
     if request.prompt is not None:
@@ -205,18 +214,27 @@ async def execute_advanced_fetch(
             logger.warning("[Prompt] 失败，回退到原始视图文本：%s", exc)
             warnings.append(f"prompt 处理失败，已回退到原始文本：{exc}")
             result_text = rendered
-        result_text, truncated = _truncate_text_middle(result_text, effective_max_length)
+        result_text, truncated = _truncate_text_middle(
+            result_text, effective_max_length
+        )
+        next_cursor = encode_cursor(len(result_text)) if truncated else None
         return _build_public_result(
             fetch_result=fetch_result,
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
+            next_cursor=next_cursor,
         )
 
+    # 正常提取
     result_text, truncated = _truncate_text_middle(rendered, effective_max_length)
+    next_cursor = (
+        encode_cursor(len(rendered)) if len(rendered) > effective_max_length else None
+    )
     return _build_public_result(
         fetch_result=fetch_result,
         result_payload=result_text,
         warnings=warnings,
         truncated=truncated,
+        next_cursor=next_cursor,
     )

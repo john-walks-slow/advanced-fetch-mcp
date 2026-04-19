@@ -23,51 +23,40 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         sys.modules["fastmcp"] = fastmcp_stub
         return importlib.import_module("advanced_fetch_mcp.server")
 
-    async def test_flat_arguments_are_forwarded_without_dsl_wrapper(self):
+    async def test_request_is_passed_directly(self):
         server = self._import_server()
+        from advanced_fetch_mcp.dsl import AdvancedFetchParams
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            mode="dynamic",
+            markdownify=False,
+            scope="body",
+            strip=[".ad"],
+            keep_media=True,
+            max_length=123,
+            refresh_cache=True,
+        )
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(
-                url="https://example.com",
-                ctx=object(),
-                mode="dynamic",
-                markdownify=False,
-                scope="body",
-                strip=[".ad"],
-                keep_media=True,
-                max_length=123,
-                refresh_cache=True,
-            )
+            result = await server.advanced_fetch(request=request, ctx=object())
         self.assertEqual(result, {"success": True})
-        request = exec_mock.await_args.kwargs["request"]
-        self.assertEqual(request.mode, "dynamic")
-        self.assertFalse(request.markdownify)
-        self.assertEqual(request.scope, "body")
-        self.assertEqual(request.strip, [".ad"])
-        self.assertTrue(request.keep_media)
-        self.assertEqual(request.max_length, 123)
-        self.assertTrue(request.refresh_cache)
+        passed_request = exec_mock.await_args.kwargs["request"]
+        self.assertEqual(passed_request.url, "https://example.com")
+        self.assertEqual(passed_request.mode, "dynamic")
+        self.assertFalse(passed_request.markdownify)
+        self.assertEqual(passed_request.scope, "body")
+        self.assertEqual(passed_request.strip, [".ad"])
+        self.assertTrue(passed_request.keep_media)
+        self.assertEqual(passed_request.max_length, 123)
+        self.assertTrue(passed_request.refresh_cache)
 
-    async def test_flat_arguments_normalize_none_strip_to_empty_list(self):
+    async def test_evaluate_js_request_is_valid(self):
         server = self._import_server()
+        from advanced_fetch_mcp.dsl import AdvancedFetchParams
+        request = AdvancedFetchParams(url="https://example.com", evaluateJS="return document.title;")
         with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            await server.advanced_fetch(
-                url="https://example.com",
-                ctx=object(),
-                strip=None,
-            )
-        request = exec_mock.await_args.kwargs["request"]
-        self.assertEqual(request.strip, [])
-
-    async def test_evaluate_js_does_not_include_default_view_arguments(self):
-        server = self._import_server()
-        with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(
-                url="https://example.com",
-                ctx=object(),
-                evaluateJS="return document.title;",
-            )
+            result = await server.advanced_fetch(request=request, ctx=object())
         self.assertEqual(result, {"success": True})
-        request = exec_mock.await_args.kwargs["request"]
-        self.assertEqual(request.evaluateJS, "return document.title;")
-        self.assertIsNone(request.prompt)
-        self.assertIsNone(request.find_in_page)
+        passed_request = exec_mock.await_args.kwargs["request"]
+        self.assertEqual(passed_request.evaluateJS, "return document.title;")
+        self.assertIsNone(passed_request.prompt)
+        self.assertIsNone(passed_request.find_in_page)

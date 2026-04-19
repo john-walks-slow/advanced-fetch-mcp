@@ -1,486 +1,121 @@
 # advanced-fetch-mcp
 
-`advanced-fetch-mcp` 是一个只做一件事的 MCP Server：把页面抓下来，再做少量高频后处理。
+为 Agent 提供快速、强大、节省 Token 的动态网页抓取能力。
+比 vanilla fetch 强大，比 Playwright 简单。
 
-它不替代完整浏览器自动化，也不替代 Browserbase/Playwright 编排。它适合这类调用：
+## 功能
 
-- 抓网页正文
-- 返回 Markdown 或原始 HTML
-- 在结果里搜索并按游标续读
-- 对提取文本做一轮 prompt 整理
-- 在真实页面上下文执行 JavaScript
-
-## 能力概览
-
-只暴露一个工具：`advanced_fetch`
-
-核心特性：
-
-- `dynamic` 和 `static` 两种抓取模式
-- `full` / `body` / `content` 三种视图范围
-- `selector` 和 `strip` 做局部提取
-- `find_in_page` 做搜索和续读
-- `evaluateJS` 在页面里执行脚本
-- `require_user_intervention` 支持人工登录或过验证后继续
+- **节省 Token**：默认只抓正文，自动剔除 script/style/img/video 等无用节点。支持自定义 `selector`、`strip` 精确控制范围。
+- **智能提取**：支持 Sampling 能力，调用 LLM 对内容进行整理，返回精简结果，避免原始页面内容污染调用方的上下文。
+- **搜索续读**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意命中位置续读，适合大页面分段处理。
+- **人工介入**：`require_user_intervention=true` 打开可见浏览器，页面会注入"我已完成操作"按钮。用户登录、过验证码、手动点选后点击按钮，工具继续抓取。
+- **登录态持久化**：浏览器 profile 存到 `~/.advanced-fetch-profile`，登录一次后续请求自动保持登录态。
+- 支持 HTTP_PROXY / HTTPS_PROXY 代理
 
 ## 安装
 
-### 1. 安装依赖
-
 ```bash
 uv sync
-```
-
-### 2. 安装 Playwright 浏览器
-
-```bash
 uv run playwright install
 ```
 
-### 3. 可选：复制环境变量模板
-
-```bash
-cp .env.example .env
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-## 启动
-
-```bash
-uv run advanced-fetch-mcp
-```
-
-项目入口定义在 `pyproject.toml`：
-
-- 命令名：`advanced-fetch-mcp`
-- 入口：`advanced_fetch_entry:main`
-
-## MCP Server 配置建议
-
-推荐把浏览器 profile 放到仓库外面，否则真实抓取后会持续污染 git 工作区。
-
-例如：
-
-```env
-BROWSER_PROFILE_DIR=C:\Users\John\.advanced-fetch-profile
-```
-
-或：
-
-```env
-BROWSER_PROFILE_DIR=/Users/you/.advanced-fetch-profile
-```
-
-### Claude Desktop
-
-Windows 示例：
+## MCP Client 配置
 
 ```json
 {
   "mcpServers": {
     "advanced-fetch": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "--directory",
-        "D:\\+Projects\\Coding\\advanced-fetch-mcp",
-        "run",
+        "--from",
+        "git+https://github.com/john-walks-slow/advanced-fetch-mcp",
         "advanced-fetch-mcp"
       ],
       "env": {
         "BROWSER_CHANNEL": "chrome",
-        "BROWSER_PROFILE_DIR": "C:\\Users\\John\\.advanced-fetch-profile"
+        "DEFAULT_TIMEOUT": 10,
+        "HTTP_PROXY": "",
+        "HTTPS_PROXY": "",
+        "ENABLE_PROMPT_EXTRACTION": true,
+        "MAX_FIND_MATCHES": 8,
+        "FIND_SNIPPET_MAX_CHARS": 240
       }
     }
   }
 }
 ```
 
-macOS / Linux 示例：
+浏览器 profile 默认存到 `~/.advanced-fetch-profile`。
 
-```json
-{
-  "mcpServers": {
-    "advanced-fetch": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/advanced-fetch-mcp",
-        "run",
-        "advanced-fetch-mcp"
-      ],
-      "env": {
-        "BROWSER_CHANNEL": "chrome",
-        "BROWSER_PROFILE_DIR": "/Users/you/.advanced-fetch-profile"
-      }
-    }
-  }
-}
-```
+## 参数
 
-### 其他 MCP Client
+| 参数                        | 说明                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `url`                       | 目标网址。                                                                                                    |
+| `mode`                      | 页面抓取方式。dynamic 使用 Playwright；static 直接获取页面响应。                                              |
+| `wait_for`                  | dynamic 模式下，networkidle 后额外等待秒数（适合有懒加载内容的页面）。                                        |
+| `timeout`                   | 抓取超时秒数，超时后返回当前已加载内容。                                                                      |
+| `markdownify`               | 是否转换成 Markdown；为 false 时返回原始 HTML。                                                               |
+| `scope`                     | 基础范围。可选 full（全页）、body（body）、content（智能选择正文）。                                          |
+| `selector`                  | 在基础范围内，再用 CSS selector 选出更小的子区域。                                                            |
+| `strip`                     | 在当前范围内，按这些 CSS selector 剔除节点。                                                                  |
+| `keep_media`                | 是否保留图片、视频、音频、SVG 等媒体节点。                                                                    |
+| `cursor`                    | 文本位置偏移。从该位置续读或继续搜索。                                                                        |
+| `max_length`                | 文本结果长度上限。                                                                                            |
+| `find_in_page`              | 搜索关键词。返回 matches 列表，适合在长页面中定位关键部分。                                                   |
+| `find_with_regex`           | 是否把 find_in_page 按正则表达式处理。                                                                        |
+| `prompt`                    | 提取提示词。提供后，调用 LLM 对内容进行整理和提取，返回提取后的结果。可以避免原始页面内容污染调用方的上下文。 |
+| `evaluateJS`                | 在页面上下文中执行 JavaScript，返回脚本结果。                                                                 |
+| `require_user_intervention` | 需要登录/过验证码时设为 true，打开可见浏览器让用户手动操作，完成后点按钮继续抓取。                            |
+| `refresh_cache`             | 是否忽略已有缓存重新抓取。(`require_user_intervention` 和 `evaluateJS` 自动忽略)                              |
 
-只要客户端支持 `stdio` 型 MCP Server，思路都一样：
+## 示例
 
-- `command`: `uv`
-- `args`: `["--directory", "<repo-path>", "run", "advanced-fetch-mcp"]`
-- `env`: 按需传 `BROWSER_CHANNEL`、`BROWSER_PROFILE_DIR` 等变量
-
-如果你的运行环境更适合直接执行 Python，也可以用：
-
-```json
-{
-  "command": "uv",
-  "args": [
-    "--directory",
-    "/path/to/advanced-fetch-mcp",
-    "run",
-    "python",
-    "advanced_fetch_entry.py"
-  ]
-}
-```
-
-## 环境变量
-
-常用环境变量：
-
-```env
-DEFAULT_TIMEOUT=10
-STATIC_FETCH_TIMEOUT=10
-
-BROWSER_CHANNEL=chrome
-BROWSER_PROFILE_DIR=/path/to/fetch-browser-profile
-BROWSER_PROFILE_TEMPLATE_DIR=/path/to/your/chrome-or-edge-profile
-
-ENABLE_PROMPT_EXTRACTION=true
-PROMPT_INPUT_MAX_CHARS=16000
-PROMPT_OUTPUT_MAX_TOKENS=1200
-
-MAX_FIND_MATCHES=8
-FIND_SNIPPET_MAX_CHARS=240
-```
-
-说明：
-
-- `DEFAULT_TIMEOUT`
-  - 同时影响导航超时和 `networkidle` 等待时间
-- `STATIC_FETCH_TIMEOUT`
-  - `static` 模式的请求超时
-- `BROWSER_CHANNEL`
-  - 只支持 `chrome` 或 `msedge`
-- `BROWSER_PROFILE_DIR`
-  - `dynamic` 抓取和 `evaluateJS` 默认都会使用这个目录
-  - 不设置时，默认使用项目目录下的 `.fetch-browser-profile`
-  - 实际使用建议显式改到仓库外
-- `BROWSER_PROFILE_TEMPLATE_DIR`
-  - 可选
-  - 启动前从已有浏览器配置中复制登录态和本地存储相关数据
-  - 只补缺失数据，不覆盖现有 profile
-- `ENABLE_PROMPT_EXTRACTION`
-  - 关闭后，`prompt` 参数不可用
-
-## 工具参数
-
-`advanced_fetch` 的参数全部是顶层平铺参数，不需要再包一层对象。
-
-最小调用：
+抓正文：
 
 ```yaml
 url: https://example.com
-mode: dynamic
-markdownify: true
 scope: content
 ```
 
-完整参数：
+搜索关键词：
 
 ```yaml
 url: https://example.com
+find_in_page: '价格'
+```
 
-mode: dynamic
-wait_for: 0
-require_user_intervention: false
+从搜索结果位置续读：
 
-markdownify: true
+```yaml
+url: https://example.com
+cursor: 300 # 假设这是某个命中的 cursor
+max_length: 300
+```
+
+智能提取（让模型整理）：
+
+```yaml
+url: https://example.com
 scope: content
-selector: null
-strip: []
-keep_media: false
-
-prompt: null
-find_in_page: null
-evaluateJS: null
-
-max_length: 20000
-refresh_cache: false
+prompt: '提取商品名称和价格'
 ```
 
-### 抓取参数
-
-- `url`
-  - 目标网址
-- `mode`
-  - `dynamic`：使用浏览器加载页面
-  - `static`：直接请求页面响应
-- `wait_for`
-  - 仅在 `dynamic` 模式下生效
-  - 页面导航完成后额外等待的秒数
-- `require_user_intervention`
-  - 为 `true` 时，会打开非 headless 浏览器并注入“我已完成页面操作”按钮
-  - 适合登录、过验证或手动点选之后再继续抓取
-
-### 结果视图参数
-
-- `markdownify`
-  - `true`：返回 Markdown
-  - `false`：返回原始 HTML
-- `scope`
-  - `full`：整个文档
-  - `body`：`body` 范围
-  - `content`：优先 `main`、`article` 等正文区域，找不到时回退 `body`
-- `selector`
-  - 在基础范围内继续用 CSS selector 缩小区域
-- `strip`
-  - 在当前范围内删除一组 CSS selector 命中的节点
-- `keep_media`
-  - 默认会移除图片、视频、音频、SVG 等媒体节点
-
-### 结果处理参数
-
-- `prompt`
-  - 把当前视图文本交给模型再整理一轮
-- `find_in_page`
-  - 在提取文本里搜索，或者用游标继续读取
-- `evaluateJS`
-  - 在真实页面上下文里执行 JavaScript
-  - 只支持 `dynamic`
-  - 与 `prompt`、`find_in_page`、`markdownify`、`scope`、`selector`、`strip`、`keep_media` 互斥
-
-### 其他参数
-
-- `max_length`
-  - 文本结果长度上限
-  - 普通提取、`prompt`、`evaluateJS` 都会按它截断
-  - 搜索模式下表示窗口大小
-- `refresh_cache`
-  - 忽略当前 URL 对应的已有缓存并重新抓取
-
-## `find_in_page`
-
-`find_in_page` 保持为对象，因为它承担两个动作：
-
-1. 首次搜索
-2. 继续读取 / 跳转到命中位置
-
-首次搜索：
+需要登录的网站：
 
 ```yaml
-find_in_page:
-  query: 退款
-  regex: false
-```
-
-续读或跳转：
-
-```yaml
-find_in_page:
-  cursor: 2af
-```
-
-字段说明：
-
-- `query`
-  - 首次搜索时提供
-- `regex`
-  - 是否按正则处理 `query`
-- `cursor`
-  - 继续读取或跳转时提供
-  - 可以直接使用上次返回的 `next_cursor`
-  - 也可以使用 `matches` 中某个命中的 `cursor`
-
-首次搜索返回时，可能额外包含：
-
-- `found`
-- `matches`
-- `matches_total`
-- `matches_truncated`
-- `next_cursor`
-
-其中：
-
-- `matches`
-  - 默认最多返回 8 个命中摘要
-- 每个命中只保留：
-  - `snippet`
-  - `cursor`
-
-## 返回字段
-
-所有成功结果都会包含：
-
-- `success`
-- `final_url`
-- `result`
-
-按需返回：
-
-- `timed_out`
-- `timeout_stage`
-- `warnings`
-- `truncated`
-- `intervention_ended_by`
-- `found`
-- `matches`
-- `matches_total`
-- `matches_truncated`
-- `next_cursor`
-
-### `intervention_ended_by`
-
-启用 `require_user_intervention` 时，可能返回：
-
-- `user_marked_ready`
-- `page_closed`
-- `timeout`
-
-含义分别是：
-
-- 用户点击了“我已完成页面操作”
-- 浏览器页面被关闭
-- 人工介入等待超时
-
-## 使用示例
-
-### 抓正文 Markdown
-
-```yaml
-url: https://example.com
-mode: dynamic
-markdownify: true
-scope: content
-```
-
-### 抓正文 HTML
-
-```yaml
-url: https://example.com
-mode: dynamic
-markdownify: false
-scope: content
-```
-
-### 去掉广告区再抓正文
-
-```yaml
-url: https://example.com
-mode: dynamic
-markdownify: true
-scope: content
-strip:
-  - .share
-  - .related
-  - .ad
-```
-
-### 搜索关键词
-
-```yaml
-url: https://example.com
-mode: dynamic
-markdownify: true
-scope: content
-find_in_page:
-  query: 退款
-```
-
-### 跳到某个匹配
-
-```yaml
-url: https://example.com
-mode: dynamic
-markdownify: true
-scope: content
-find_in_page:
-  cursor: 2af
-```
-
-### 人工登录后继续抓取
-
-```yaml
-url: https://example.com
-mode: dynamic
+url: https://private-site.com
 require_user_intervention: true
-markdownify: true
-scope: content
 ```
 
-### 在页面里执行 JavaScript
+会打开可见浏览器，用户登录后点击页面上的"我已完成操作"按钮，工具继续抓取。已登录的 session 会保存到 profile，下次访问自动保持登录态。
 
-函数体风格：
+## 缓存
 
-```yaml
-url: https://example.com
-mode: dynamic
-evaluateJS: |
-  return {
-    title: document.title,
-    href: location.href,
-  }
-```
+最近抓取的网站会按 url + mode 缓存，下次访问、查找无需重新抓取。`require_user_intervention` 和 `evaluateJS` 无视缓存。
 
-表达式风格：
-
-```yaml
-url: https://example.com
-mode: dynamic
-evaluateJS: document.title
-```
-
-箭头函数风格：
-
-```yaml
-url: https://example.com
-mode: dynamic
-evaluateJS: |
-  () => ({
-    title: document.title,
-    href: location.href,
-  })
-```
-
-## 缓存行为
-
-- 只有非 `evaluateJS` 请求会命中抓取缓存
-- 缓存按这些条件区分：
-  - `url`
-  - `mode`
-  - `wait_for`
-  - `require_user_intervention`
-- `refresh_cache: true` 会强制重新抓取
-
-## 验证
-
-本地测试：
+## 测试
 
 ```bash
 uv run python -m unittest discover -s tests
 ```
-
-## 适用边界
-
-适合：
-
-- 从网页取正文
-- 在稳定页面上做轻量后处理
-- 要求参数少、调用简单的 MCP 场景
-
-不适合：
-
-- 跨多个页面的复杂流程
-- 需要精细点击、表单、上传、下载编排
-- 完整浏览器测试自动化

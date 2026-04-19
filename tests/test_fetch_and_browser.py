@@ -70,14 +70,14 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
             _copy_profile_template(src, dst)
             self.assertTrue((dst / "Local Storage" / "leveldb" / "000003.log").exists())
 
-    def test_cache_is_partitioned_by_mode_and_wait_settings(self):
-        store_cached_fetch("https://example.com", "static", 0, False, "https://static", "<main>static</main>")
+    def test_cache_is_partitioned_by_url_and_mode(self):
+        store_cached_fetch("https://example.com", "static", "https://static", "<main>static</main>")
         self.assertEqual(
-            get_cached_fetch("https://example.com", "static", 0, False),
+            get_cached_fetch("https://example.com", "static"),
             ("https://static", "<main>static</main>"),
         )
-        self.assertIsNone(get_cached_fetch("https://example.com", "dynamic", 0, False))
-        self.assertIsNone(get_cached_fetch("https://example.com", "static", 1, False))
+        self.assertIsNone(get_cached_fetch("https://example.com", "dynamic"))
+        self.assertIsNone(get_cached_fetch("https://other.com", "static"))
 
     def test_evaluate_script_wraps_function_body_style_snippets(self):
         wrapped = _build_page_evaluate_script("return { title: document.title };")

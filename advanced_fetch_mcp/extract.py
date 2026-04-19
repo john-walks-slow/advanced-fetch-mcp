@@ -82,37 +82,35 @@ def _window_start_for_match(match_start: int, max_length: int) -> int:
     return max(0, match_start - max_length // 4)
 
 
-def _build_match_summary(full_text: str, match: re.Match[str], max_length: int) -> MatchSummary:
+def _build_match_summary(full_text: str, match: re.Match[str], max_length: int, text_offset: int = 0) -> MatchSummary:
+    # match.start() 是相对于 search_text 的位置，需要加上 text_offset 得到绝对位置
+    absolute_start = match.start() + text_offset
     snippet_radius = max(20, FIND_SNIPPET_MAX_CHARS // 2)
-    snippet_start = max(0, match.start() - snippet_radius)
-    snippet_end = min(len(full_text), match.end() + snippet_radius)
+    snippet_start = max(0, absolute_start - snippet_radius)
+    snippet_end = min(len(full_text), match.end() + text_offset + snippet_radius)
     snippet = full_text[snippet_start:snippet_end]
     if snippet_start > 0:
         snippet = "…" + snippet
     if snippet_end < len(full_text):
         snippet = snippet + "…"
-    cursor = encode_cursor(_window_start_for_match(match.start(), max_length))
+    cursor = encode_cursor(_window_start_for_match(absolute_start, max_length))
     return {
         "snippet": snippet,
         "cursor": cursor,
     }
 
 
-def encode_cursor(offset: int) -> str:
-    return format(max(0, offset), "x")
+def encode_cursor(offset: int) -> int:
+    return max(0, offset)
 
 
-def decode_cursor(cursor: str) -> int:
-    value = (cursor or "").strip().lower()
-    if not value:
-        raise ValueError("cursor 不能为空。")
-    try:
-        return int(value, 16)
-    except ValueError as exc:
-        raise ValueError("cursor 非法。") from exc
-
-
-def search_in_text(full_text: str, query: str, max_length: int, use_regex: bool) -> Dict[str, Any]:
+def search_in_text(
+    full_text: str,
+    query: str,
+    max_length: int,
+    use_regex: bool,
+    text_offset: int = 0,
+) -> Dict[str, Any]:
     if use_regex:
         try:
             regex = re.compile(query, re.IGNORECASE)
@@ -121,7 +119,10 @@ def search_in_text(full_text: str, query: str, max_length: int, use_regex: bool)
     else:
         regex = re.compile(re.escape(query), re.IGNORECASE)
 
-    found_matches = list(regex.finditer(full_text))
+    # 从 text_offset 位置开始搜索
+    search_start = max(0, text_offset)
+    search_text = full_text[search_start:]
+    found_matches = list(regex.finditer(search_text))
     matches_total = len(found_matches)
     if not found_matches:
         return {
@@ -133,17 +134,19 @@ def search_in_text(full_text: str, query: str, max_length: int, use_regex: bool)
             "next_cursor": None,
         }
 
+    # 最多返回 MAX_FIND_MATCHES 个
     matches_truncated = matches_total > MAX_FIND_MATCHES
     matches = [
-        _build_match_summary(full_text=full_text, match=match, max_length=max_length)
-        for i, match in enumerate(found_matches[:MAX_FIND_MATCHES])
+        _build_match_summary(full_text=full_text, match=match, max_length=max_length, text_offset=search_start)
+        for match in found_matches[:MAX_FIND_MATCHES]
     ]
-    first = matches[0]
-    start = decode_cursor(first["cursor"])
-    end = min(len(full_text), start + max_length)
-    next_cursor = encode_cursor(end) if end < len(full_text) else None
+
+    # next_cursor: 第一个 match 的文本位置（用于续读）
+    first = matches[0] if matches else None
+    next_cursor = first["cursor"] if first else None
+
     return {
-        "text": full_text[start:end],
+        "text": "",
         "found": True,
         "matches": matches,
         "matches_total": matches_total,
@@ -152,8 +155,8 @@ def search_in_text(full_text: str, query: str, max_length: int, use_regex: bool)
     }
 
 
-def continue_in_text(full_text: str, cursor: str, max_length: int) -> Dict[str, Any]:
-    start = decode_cursor(cursor)
+def continue_in_text(full_text: str, cursor: int, max_length: int) -> Dict[str, Any]:
+    start = max(0, cursor)
     if start >= len(full_text):
         return {
             "text": "",

@@ -13,7 +13,7 @@ def env_flag(name: str, default: bool = False) -> bool:
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_FILE = BASE_DIR / ".env"
 
-DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", "20000"))
+DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", "8000"))
 INTERVENTION_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", "600"))
 INTERVENTION_BUTTON_ID = "advanced-fetch-intervention-done"
 DEFAULT_TIMEOUT_SECONDS = float(os.getenv("DEFAULT_TIMEOUT", "10"))
@@ -22,12 +22,14 @@ NETWORK_IDLE_TIMEOUT_MS = max(1, int(float(os.getenv("NETWORK_IDLE_TIMEOUT", str
 STATIC_FETCH_TIMEOUT_SECONDS = max(0.1, float(os.getenv("STATIC_FETCH_TIMEOUT", str(DEFAULT_TIMEOUT_SECONDS))))
 ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", True)
 PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", "16000"))
-PROMPT_OUTPUT_MAX_TOKENS = int(os.getenv("PROMPT_OUTPUT_MAX_TOKENS", "1200"))
 MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", "8"))
 FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", "240"))
 
 BROWSER_CHANNEL = os.getenv("BROWSER_CHANNEL", "chrome").strip().lower() or "chrome"
-BROWSER_PROFILE_DIR = Path(os.getenv("BROWSER_PROFILE_DIR", str(BASE_DIR / ".fetch-browser-profile"))).expanduser()
+BROWSER_PROFILE_DIR = Path(os.getenv(
+    "BROWSER_PROFILE_DIR",
+    str(Path.home() / ".advanced-fetch-profile")
+)).expanduser()
 BROWSER_PROFILE_TEMPLATE_DIR = os.getenv("BROWSER_PROFILE_TEMPLATE_DIR", "").strip()
 
 USER_AGENT = (

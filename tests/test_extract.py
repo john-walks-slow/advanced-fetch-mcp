@@ -26,7 +26,7 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("cursor", result["matches"][0])
 
     def test_continue_reads_from_cursor(self):
-        result = continue_in_text("0123456789abcdef", "8", 4)
+        result = continue_in_text("0123456789abcdef", 8, 4)
         self.assertEqual(result["text"], "89ab")
 
     def test_body_scope_keeps_navigation_text(self):

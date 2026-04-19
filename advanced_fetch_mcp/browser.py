@@ -35,11 +35,17 @@ _PROFILE_MIGRATION_NAMES = {
 
 
 def _proxy_settings():
-    proxy_url = os.getenv("HTTP_PROXY") or os.getenv("http_proxy")
+    """统一代理设置：HTTP_PROXY 或 HTTPS_PROXY，设置后自动启用。"""
+    proxy_url = (
+        os.getenv("HTTPS_PROXY")
+        or os.getenv("https_proxy")
+        or os.getenv("HTTP_PROXY")
+        or os.getenv("http_proxy")
+    )
+    if not proxy_url:
+        return None
     no_proxy = os.getenv("NO_PROXY") or os.getenv("no_proxy")
-    if env_flag("BROWSER_USE_PROXY") and proxy_url:
-        return {"server": proxy_url, "bypass": no_proxy}
-    return None
+    return {"server": proxy_url, "bypass": no_proxy} if no_proxy else {"server": proxy_url}
 
 
 def _validated_channel() -> str:
