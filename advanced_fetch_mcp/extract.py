@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
@@ -24,29 +24,31 @@ def build_view_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
     root: Tag = soup
-    scope = view.get("scope") or "content"
 
-    if scope == "full":
-        pass
-    elif scope == "body":
-        for tag_name in CORE_REMOVE_TAGS:
-            for tag in root.find_all(tag_name):
-                tag.decompose()
-        selected = root.body or root
-        if selected is not root:
-            root = BeautifulSoup(str(selected), "html.parser")
-    elif scope == "content":
-        for tag_name in CORE_REMOVE_TAGS:
-            for tag in root.find_all(tag_name):
-                tag.decompose()
+    # 合并所有要移除的标签，一次性遍历
+    all_remove_tags = set(CORE_REMOVE_TAGS)
+    if not view.get("keep_media", False):
+        all_remove_tags.update(MEDIA_REMOVE_TAGS)
+    for tag_name in all_remove_tags:
+        for tag in root.find_all(tag_name):
+            tag.decompose()
+
+    # scope 选择，直接用 Tag，不重新解析
+    scope = view.get("scope") or "content"
+    if scope == "content":
         selected = root.select_one(CONTENT_ROOT_SELECTORS)
         if selected is None:
             selected = root.body or root
         if selected is not root:
-            root = BeautifulSoup(str(selected), "html.parser")
-    else:
+            root = selected
+    elif scope == "body":
+        selected = root.body or root
+        if selected is not root:
+            root = selected
+    elif scope != "full":
         raise ValueError(f"Unsupported scope: {scope}")
 
+    # selector 也直接用
     selector = view.get("selector")
     if selector:
         try:
@@ -54,7 +56,7 @@ def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
         except Exception:
             selected = None
         if selected is not None and selected is not root:
-            root = BeautifulSoup(str(selected), "html.parser")
+            root = selected
 
     for css_selector in view.get("strip", []):
         try:
@@ -63,16 +65,12 @@ def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
         except Exception:
             continue
 
-    if not view.get("keep_media", False):
-        for tag_name in MEDIA_REMOVE_TAGS:
-            for tag in root.find_all(tag_name):
-                tag.decompose()
-
     return root
 
 
 def render_view(html: str, view: Dict[str, Any]) -> str:
-    prepared_root = prepare_root(BeautifulSoup(html, "html.parser"), view)
+    soup = BeautifulSoup(html, "html.parser")
+    prepared_root = prepare_root(soup, view)
     if view.get("markdownify", True):
         return markdownify(str(prepared_root))
     return str(prepared_root)

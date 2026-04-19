@@ -7,8 +7,8 @@
 
 - **节省 Token**：智能识别网页主体，默认只抓正文。支持自定义 `selector`、`strip` 精确控制范围。
 - **智能提取**：支持 Sampling 能力，调用 LLM 对内容进行整理，返回精简结果，避免原始页面内容污染调用方的上下文。
-- **长页面搜索**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意命中位置续读，适合大页面分段处理。
-- **人工介入**：`require_user_intervention=true` 打开可见浏览器，页面会注入"我已完成操作"按钮。用户登录、过验证码、手动点选后点击按钮，工具继续抓取。
+- **搜索续读**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意命中位置续读，适合大页面分段处理。
+- **人工介入**：`require_user_intervention=true` 可以要求用户介入，执行登录、过验证码等操作后，工具继续抓取。
 - **登录态持久化**：浏览器 profile 存到 `~/.advanced-fetch-profile`，登录一次后续请求自动保持登录态。
 - 支持 HTTP_PROXY / HTTPS_PROXY 代理
 
