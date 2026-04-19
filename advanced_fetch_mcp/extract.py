@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
+import trafilatura
 
 from .settings import CONTENT_ROOT_SELECTORS, CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES, MEDIA_REMOVE_TAGS
 
@@ -23,6 +24,7 @@ def build_view_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
+    """用于 scope=body/full 或 trafilatura 失败时的 fallback。"""
     root: Tag = soup
 
     # 合并所有要移除的标签，一次性遍历
@@ -33,7 +35,7 @@ def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
         for tag in root.find_all(tag_name):
             tag.decompose()
 
-    # scope 选择，直接用 Tag，不重新解析
+    # scope 选择（content 在 render_view 已由 trafilatura 处理）
     scope = view.get("scope") or "content"
     if scope == "content":
         selected = root.select_one(CONTENT_ROOT_SELECTORS)
@@ -69,9 +71,29 @@ def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
 
 
 def render_view(html: str, view: Dict[str, Any]) -> str:
+    scope = view.get("scope") or "content"
+    want_markdown = view.get("markdownify", True)
+    keep_media = view.get("keep_media", False)
+
+    # scope=content 时优先用 trafilatura 智能提取（自动剔除广告/噪音）
+    if scope == "content":
+        output_format = "markdown" if want_markdown else "txt"
+        extracted = trafilatura.extract(
+            html,
+            output_format=output_format,
+            include_comments=False,
+            include_tables=True,
+            include_images=keep_media,
+            favor_precision=True,  # 精确模式，避免误删正文
+        )
+        if extracted:
+            return extracted
+        # trafilatura 失败，fallback 到 selector 逻辑
+
+    # scope=body/full 或 trafilatura 失败时，用原有逻辑
     soup = BeautifulSoup(html, "html.parser")
     prepared_root = prepare_root(soup, view)
-    if view.get("markdownify", True):
+    if want_markdown:
         return markdownify(str(prepared_root))
     return str(prepared_root)
 

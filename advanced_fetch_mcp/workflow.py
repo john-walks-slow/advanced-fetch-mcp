@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Tuple
 
-from .dsl import AdvancedFetchParams
+from .params import AdvancedFetchParams
 from .extract import (
     build_view_config,
     continue_in_text,
@@ -119,7 +119,11 @@ async def execute_advanced_fetch(
     effective_max_length = request.max_length or DEFAULT_MAX_LENGTH
 
     # require_user_intervention 或 evaluateJS 强制刷新缓存
-    skip_cache = request.require_user_intervention or request.evaluateJS is not None or request.refresh_cache
+    skip_cache = (
+        request.require_user_intervention
+        or request.evaluateJS is not None
+        or request.refresh_cache
+    )
     cached = get_cached_fetch(url, request.mode) if not skip_cache else None
 
     if cached is not None:
@@ -136,7 +140,9 @@ async def execute_advanced_fetch(
         )
         # 只有非 intervention、非 evaluateJS 时才写缓存
         if not request.require_user_intervention and request.evaluateJS is None:
-            store_cached_fetch(url, request.mode, fetch_result.final_url, fetch_result.html)
+            store_cached_fetch(
+                url, request.mode, fetch_result.final_url, fetch_result.html
+            )
 
     warnings = _build_warnings(fetch_result)
 

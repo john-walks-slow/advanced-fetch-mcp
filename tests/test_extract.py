@@ -36,10 +36,11 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("Nav", result)
         self.assertIn("Main", result)
 
-    def test_content_scope_prefers_main_over_outer_navigation(self):
+    def test_content_scope_trafilatura_excludes_navigation(self):
+        """trafilatura 智能提取正文，剔除导航元素（包括外层和内层）。"""
         html = "<html><body><nav>Outer</nav><main><nav>Inner</nav><h1>Main</h1></main></body></html>"
         view = build_view_config({"markdownify": True, "scope": "content"})
         result = render_view(html, view)
-        self.assertNotIn("Outer", result)
-        self.assertIn("Inner", result)
-        self.assertIn("Main", result)
+        self.assertNotIn("Outer", result)  # 外层导航被剔除
+        self.assertNotIn("Inner", result)  # 内层导航也被智能剔除
+        self.assertIn("Main", result)      # 正文标题保留

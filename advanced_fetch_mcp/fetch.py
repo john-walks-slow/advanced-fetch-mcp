@@ -10,7 +10,7 @@ from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .browser import browser_manager
 from .detection import build_intervention_script, wait_for_intervention_end
-from .dsl import FetchMode
+from .params import FetchMode
 from .settings import (
     DEFAULT_TIMEOUT_SECONDS,
     NAVIGATION_TIMEOUT_MS,
@@ -148,10 +148,14 @@ async def dynamic_fetch(
                 timeout_stage = "networkidle"
                 logger.warning("[DynamicFetch] networkidle 超时，立即抓取当前内容")
             except Exception as exc:
-                logger.warning("[DynamicFetch] 等待 networkidle 失败，立即抓取当前内容：%s", exc)
+                logger.warning(
+                    "[DynamicFetch] 等待 networkidle 失败，立即抓取当前内容：%s", exc
+                )
 
         if require_user_intervention:
-            html, final_url, intervention_ended_by = await wait_for_intervention_end(page)
+            html, final_url, intervention_ended_by = await wait_for_intervention_end(
+                page
+            )
             if not html:
                 html, final_url = await _capture_current_page(page)
         else:

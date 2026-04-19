@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastmcp import Context, FastMCP
 
 from .browser import browser_manager
-from .dsl import (
+from .params import (
     AdvancedFetchParams,
     CursorParam,
     EvaluateJSParam,

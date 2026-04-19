@@ -4,9 +4,9 @@ pyproject.toml
 advanced_fetch_mcp/__init__.py
 advanced_fetch_mcp/browser.py
 advanced_fetch_mcp/detection.py
-advanced_fetch_mcp/dsl.py
 advanced_fetch_mcp/extract.py
 advanced_fetch_mcp/fetch.py
+advanced_fetch_mcp/params.py
 advanced_fetch_mcp/sampling.py
 advanced_fetch_mcp/server.py
 advanced_fetch_mcp/settings.py

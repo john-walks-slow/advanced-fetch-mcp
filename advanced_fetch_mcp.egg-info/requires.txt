@@ -5,3 +5,4 @@ playwright>=1.49.0
 pydantic>=2.8.0
 python-dotenv>=1.0.0
 requests>=2.32.0
+trafilatura>=1.12.0
