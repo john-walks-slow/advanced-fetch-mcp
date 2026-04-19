@@ -21,4 +21,5 @@ tests/test_dsl.py
 tests/test_extract.py
 tests/test_fetch_and_browser.py
 tests/test_server_integration.py
+tests/test_server_schema.py
 tests/test_workflow.py

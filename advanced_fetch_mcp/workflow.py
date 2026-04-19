@@ -5,7 +5,6 @@ from typing import Any, Dict, Tuple
 
 from .params import AdvancedFetchParams
 from .extract import (
-    build_view_config,
     continue_in_text,
     encode_cursor,
     render_view,
@@ -118,12 +117,8 @@ async def execute_advanced_fetch(
     url = request.url
     effective_max_length = request.max_length or DEFAULT_MAX_LENGTH
 
-    # require_user_intervention 或 evaluateJS 强制刷新缓存
-    skip_cache = (
-        request.require_user_intervention
-        or request.evaluateJS is not None
-        or request.refresh_cache
-    )
+    # require_user_intervention 或 evaluate_js 强制刷新缓存
+    skip_cache = request.should_skip_cache
     cached = get_cached_fetch(url, request.mode) if not skip_cache else None
 
     if cached is not None:
@@ -138,20 +133,20 @@ async def execute_advanced_fetch(
             request.require_user_intervention,
             request.timeout,
         )
-        # 只有非 intervention、非 evaluateJS 时才写缓存
-        if not request.require_user_intervention and request.evaluateJS is None:
+        # 只有非 intervention、非 evaluate_js 时才写缓存
+        if not request.require_user_intervention and request.evaluate_js is None:
             store_cached_fetch(
                 url, request.mode, fetch_result.final_url, fetch_result.html
             )
 
     warnings = _build_warnings(fetch_result)
 
-    if request.evaluateJS is not None:
+    if request.operation == "eval":
         value = await evaluate_script_on_page(
             url=fetch_result.final_url,
             wait_for=request.wait_for,
             require_user_intervention=request.require_user_intervention,
-            script=request.evaluateJS,
+            script=request.evaluate_js or "",
             timeout=request.timeout,
         )
         result_text, truncated = _truncate_text_middle(
@@ -165,11 +160,10 @@ async def execute_advanced_fetch(
             truncated=truncated,
         )
 
-    view = build_view_config(request.model_dump())
-    rendered = render_view(fetch_result.html, view)
+    rendered = render_view(fetch_result.html, request.to_render_config())
 
     # find 搜索
-    if request.find_in_page is not None:
+    if request.operation == "find":
         text_offset = request.cursor or 0
         find_result = search_in_text(
             rendered,
@@ -204,12 +198,12 @@ async def execute_advanced_fetch(
             next_cursor=continue_result.get("next_cursor"),
         )
 
-    if request.prompt is not None:
+    if request.operation == "extract":
         try:
             prompt_output = await run_prompt_extraction(
                 ctx=ctx,
                 source_text=rendered,
-                prompt=request.prompt,
+                prompt=request.extract_prompt or "",
             )
             result_text = (
                 ""
@@ -218,7 +212,7 @@ async def execute_advanced_fetch(
             )
         except Exception as exc:
             logger.warning("[Prompt] 失败，回退到原始视图文本：%s", exc)
-            warnings.append(f"prompt 处理失败，已回退到原始文本：{exc}")
+            warnings.append(f"extract_prompt 处理失败，已回退到原始文本：{exc}")
             result_text = rendered
         result_text, truncated = _truncate_text_middle(
             result_text, effective_max_length

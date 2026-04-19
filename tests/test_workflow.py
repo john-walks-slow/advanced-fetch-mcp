@@ -27,7 +27,9 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("img", result["result"])
 
     async def test_prompt_becomes_primary_result(self):
-        request = AdvancedFetchParams(url="https://example.com", prompt="提取标题")
+        request = AdvancedFetchParams(
+            url="https://example.com", extract_prompt="提取标题"
+        )
         with (
             patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
@@ -179,7 +181,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_evaluate_js_returns_stringified_result(self):
         request = AdvancedFetchParams(
-            url="https://example.com", evaluateJS="return 123;"
+            url="https://example.com", evaluate_js="return 123;"
         )
         with (
             patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
@@ -222,7 +224,8 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_evaluate_js_object_is_json_stringified(self):
         request = AdvancedFetchParams(
-            url="https://example.com", evaluateJS="return ({ title: document.title });"
+            url="https://example.com",
+            evaluate_js="return ({ title: document.title });",
         )
         with (
             patch(
@@ -304,7 +307,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["final_url"], "https://fetched")
 
     async def test_evaluate_js_skips_cache(self):
-        request = AdvancedFetchParams(url="https://example.com", evaluateJS="return 1")
+        request = AdvancedFetchParams(url="https://example.com", evaluate_js="return 1")
         with (
             patch("advanced_fetch_mcp.workflow.get_cached_fetch") as get_cache_mock,
             patch(
@@ -324,7 +327,9 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         get_cache_mock.assert_not_called()
 
     async def test_prompt_failure_falls_back_to_rendered_view(self):
-        request = AdvancedFetchParams(url="https://example.com", prompt="提炼一下")
+        request = AdvancedFetchParams(
+            url="https://example.com", extract_prompt="提炼一下"
+        )
         with (
             patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(

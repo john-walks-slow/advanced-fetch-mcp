@@ -8,20 +8,24 @@ from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 import trafilatura
 
-from .settings import CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES, MEDIA_REMOVE_TAGS
+from .params import RenderConfig
+from .settings import CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES
 
 MatchSummary = Dict[str, str]
 
 
-def build_view_config(config: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "markdownify": bool(config.get("markdownify", True)),
-        "strategy": config.get("strategy", "strict"),
-        "keep_media": bool(config.get("keep_media", False)),
-    }
+def apply_strip_selectors(root: Tag, strip_selectors: list[str]) -> Tag:
+    """按 CSS selectors 剔除节点。"""
+    for selector in strip_selectors:
+        try:
+            for tag in root.select(selector):
+                tag.decompose()
+        except Exception:
+            continue
+    return root
 
 
-def prepare_body(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
+def prepare_body(soup: BeautifulSoup, view: RenderConfig) -> Tag:
     """用于 strategy=none，返回处理后的 body。"""
     root: Tag = soup.body or soup
 
@@ -30,19 +34,16 @@ def prepare_body(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
         for tag in root.find_all(tag_name):
             tag.decompose()
 
-    # 不保留媒体时移除
-    if not view.get("keep_media", False):
-        for tag_name in MEDIA_REMOVE_TAGS:
-            for tag in root.find_all(tag_name):
-                tag.decompose()
+    # 按 strip_selectors 剔除节点
+    apply_strip_selectors(root, view.strip_selectors)
 
     return root
 
 
-def render_view(html: str, view: Dict[str, Any]) -> str:
-    strategy = view.get("strategy") or "strict"
-    want_markdown = view.get("markdownify", True)
-    keep_media = view.get("keep_media", False)
+def render_view(html: str, view: RenderConfig) -> str:
+    strategy = view.strategy
+    want_markdown = view.output_format == "markdown"
+    strip_selectors = view.strip_selectors
 
     # strategy=none 时返回完整 body（不智能提取）
     if strategy == "none":
@@ -57,12 +58,15 @@ def render_view(html: str, view: Dict[str, Any]) -> str:
     favor_precision = strategy == "strict"
     favor_recall = strategy == "loose"
 
+    # include_images: 如果 strip_selectors 包含 img，则不保留图片
+    include_images = "img" not in strip_selectors
+
     extracted = trafilatura.extract(
         html,
         output_format=output_format,
         include_comments=False,
         include_tables=True,
-        include_images=keep_media,
+        include_images=include_images,
         favor_precision=favor_precision,
         favor_recall=favor_recall,
     )
@@ -81,7 +85,9 @@ def _window_start_for_match(match_start: int, max_length: int) -> int:
     return max(0, match_start - max_length // 4)
 
 
-def _build_match_summary(full_text: str, match: re.Match[str], max_length: int, text_offset: int = 0) -> MatchSummary:
+def _build_match_summary(
+    full_text: str, match: re.Match[str], max_length: int, text_offset: int = 0
+) -> MatchSummary:
     # match.start() 是相对于 search_text 的位置，需要加上 text_offset 得到绝对位置
     absolute_start = match.start() + text_offset
     snippet_radius = max(20, FIND_SNIPPET_MAX_CHARS // 2)
@@ -136,7 +142,9 @@ def search_in_text(
     # 最多返回 MAX_FIND_MATCHES 个
     matches_truncated = matches_total > MAX_FIND_MATCHES
     matches = [
-        _build_match_summary(full_text=full_text, match=match, max_length=max_length, text_offset=search_start)
+        _build_match_summary(
+            full_text=full_text, match=match, max_length=max_length, text_offset=search_start
+        )
         for match in found_matches[:MAX_FIND_MATCHES]
     ]
 

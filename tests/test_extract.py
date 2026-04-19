@@ -1,12 +1,13 @@
 import unittest
 
-from advanced_fetch_mcp.extract import build_view_config, continue_in_text, render_view, search_in_text
+from advanced_fetch_mcp.extract import continue_in_text, render_view, search_in_text
+from advanced_fetch_mcp.params import RenderConfig
 
 
 class ExtractTests(unittest.TestCase):
     def test_render_markdown_strict_strategy(self):
         html = "<html><body><nav>Ignore</nav><main><h1>Hello</h1><p>World</p></main></body></html>"
-        view = build_view_config({"markdownify": True, "strategy": "strict"})
+        view = RenderConfig(output_format="markdown", strategy="strict")
         result = render_view(html, view)
         self.assertIn("Hello", result)
         self.assertIn("World", result)
@@ -14,7 +15,7 @@ class ExtractTests(unittest.TestCase):
 
     def test_render_html_none_strategy(self):
         html = "<html><head><script>1</script></head><body><nav>A</nav><main>B</main></body></html>"
-        view = build_view_config({"markdownify": False, "strategy": "none"})
+        view = RenderConfig(output_format="html", strategy="none")
         result = render_view(html, view)
         self.assertIn("A", result)
         self.assertIn("B", result)
@@ -31,7 +32,7 @@ class ExtractTests(unittest.TestCase):
 
     def test_none_strategy_keeps_navigation_text(self):
         html = "<html><body><nav>Nav</nav><main>Main</main></body></html>"
-        view = build_view_config({"markdownify": True, "strategy": "none"})
+        view = RenderConfig(output_format="markdown", strategy="none")
         result = render_view(html, view)
         self.assertIn("Nav", result)
         self.assertIn("Main", result)
@@ -39,8 +40,24 @@ class ExtractTests(unittest.TestCase):
     def test_strict_strategy_trafilatura_excludes_navigation(self):
         """trafilatura 智能提取正文，剔除导航元素（包括外层和内层）。"""
         html = "<html><body><nav>Outer</nav><main><nav>Inner</nav><h1>Main</h1></main></body></html>"
-        view = build_view_config({"markdownify": True, "strategy": "strict"})
+        view = RenderConfig(output_format="markdown", strategy="strict")
         result = render_view(html, view)
         self.assertNotIn("Outer", result)  # 外层导航被剔除
         self.assertNotIn("Inner", result)  # 内层导航也被智能剔除
-        self.assertIn("Main", result)      # 正文标题保留
+        self.assertIn("Main", result)  # 正文标题保留
+
+    def test_strip_selectors_removes_elements(self):
+        html = "<html><body><div class='ad'>Advertisement</div><p>Content</p></body></html>"
+        view = RenderConfig(
+            output_format="markdown", strategy="none", strip_selectors=[".ad"]
+        )
+        result = render_view(html, view)
+        self.assertNotIn("Advertisement", result)
+        self.assertIn("Content", result)
+
+    def test_empty_strip_selectors_keeps_media(self):
+        html = "<html><body><img src='test.jpg'><p>Text</p></body></html>"
+        view = RenderConfig(output_format="html", strategy="none", strip_selectors=[])
+        result = render_view(html, view)
+        self.assertIn("<img", result)
+        self.assertIn("Text", result)
