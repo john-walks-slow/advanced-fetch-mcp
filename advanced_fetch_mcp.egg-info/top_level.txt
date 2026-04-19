@@ -1,0 +1,2 @@
+advanced_fetch_entry
+advanced_fetch_mcp

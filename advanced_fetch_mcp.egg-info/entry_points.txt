@@ -1,0 +1,2 @@
+[console_scripts]
+advanced-fetch-mcp = advanced_fetch_entry:main
