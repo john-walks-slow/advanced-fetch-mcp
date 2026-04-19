@@ -5,10 +5,11 @@
 
 ## 功能
 
-- **节省 Token**：智能识别网页主体，默认只抓正文。支持自定义 `selector`、`strip` 精确控制范围。
-- **智能提取**：支持 Sampling 能力，调用 LLM 对内容进行整理，返回精简结果，避免原始页面内容污染调用方的上下文。
-- **搜索续读**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意命中位置续读，适合大页面分段处理。
-- **人工介入**：`require_user_intervention=true` 可以要求用户介入，执行登录、过验证码等操作后，工具继续抓取。
+- **智能提取**：使用 trafilatura 自动识别正文、剔除广告导航等噪音，节省 Token。
+- **灵活策略**：`strategy` 选择提取模式——strict 精确、loose 保留更多、none 返回完整 body。
+- **LLM 整理**：提供 `prompt` 让模型对内容进行提炼，返回精简结果，避免原始页面污染上下文。
+- **搜索续读**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意位置续读，适合大页面分段处理。
+- **人工介入**：`require_user_intervention=true` 打开可见浏览器，用户完成登录/验证码后继续抓取。
 - **登录态持久化**：浏览器 profile 存到 `~/.advanced-fetch-profile`，登录一次后续请求自动保持登录态。
 - 支持 HTTP_PROXY / HTTPS_PROXY 代理
 
@@ -56,9 +57,7 @@ uv run playwright install
 | `wait_for`                  | dynamic 模式下，networkidle 后额外等待秒数（适合有懒加载内容的页面）。                                        |
 | `timeout`                   | 抓取超时秒数，超时后返回当前已加载内容。                                                                      |
 | `markdownify`               | 是否转换成 Markdown；为 false 时返回原始 HTML。                                                               |
-| `scope`                     | 基础范围。可选 full（全页）、body（body）、content（智能选择正文）。                                          |
-| `selector`                  | 在基础范围内，再用 CSS selector 选出更小的子区域。                                                            |
-| `strip`                     | 在当前范围内，按这些 CSS selector 剔除节点。                                                                  |
+| `strategy`                  | 提取策略。strict 精确提取正文（避免误删）；loose 尽可能保留内容；none 返回完整 body。                         |
 | `keep_media`                | 是否保留图片、视频、音频、SVG 等媒体节点。                                                                    |
 | `cursor`                    | 文本位置偏移。从该位置续读或继续搜索。                                                                        |
 | `max_length`                | 文本结果长度上限。                                                                                            |
@@ -67,15 +66,28 @@ uv run playwright install
 | `prompt`                    | 提取提示词。提供后，调用 LLM 对内容进行整理和提取，返回提取后的结果。可以避免原始页面内容污染调用方的上下文。 |
 | `evaluateJS`                | 在页面上下文中执行 JavaScript，返回脚本结果。                                                                 |
 | `require_user_intervention` | 需要登录/过验证码时设为 true，打开可见浏览器让用户手动操作，完成后点按钮继续抓取。                            |
-| `refresh_cache`             | 是否忽略已有缓存重新抓取。(`require_user_intervention` 和 `evaluateJS` 自动忽略)                              |
+| `refresh_cache`             | 是否忽略已有缓存重新抓取。（`require_user_intervention` 和 `evaluateJS` 自动忽略缓存）                        |
 
 ## 示例
 
-抓正文：
+抓正文（默认 strict 策略，智能剔除广告导航）：
 
 ```yaml
 url: https://example.com
-scope: content
+```
+
+保留更多内容（loose 策略）：
+
+```yaml
+url: https://example.com
+strategy: loose
+```
+
+返回完整 body（包含导航等）：
+
+```yaml
+url: https://example.com
+strategy: none
 ```
 
 搜索关键词：
@@ -89,15 +101,14 @@ find_in_page: '价格'
 
 ```yaml
 url: https://example.com
-cursor: 300 # 假设这是某个命中的 cursor
+cursor: 300  # 假设这是某个命中的 cursor
 max_length: 300
 ```
 
-智能提取（让模型整理）：
+智能提炼（让模型整理）：
 
 ```yaml
 url: https://example.com
-scope: content
 prompt: '提取商品名称和价格'
 ```
 
