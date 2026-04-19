@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 import trafilatura
 
-from .settings import CONTENT_ROOT_SELECTORS, CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES, MEDIA_REMOVE_TAGS
+from .settings import CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES, MEDIA_REMOVE_TAGS
 
 MatchSummary = Dict[str, str]
 
@@ -16,83 +16,62 @@ MatchSummary = Dict[str, str]
 def build_view_config(config: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "markdownify": bool(config.get("markdownify", True)),
-        "scope": config.get("scope", "content"),
-        "selector": config.get("selector"),
-        "strip": list(config.get("strip", [])),
+        "strategy": config.get("strategy", "strict"),
         "keep_media": bool(config.get("keep_media", False)),
     }
 
 
-def prepare_root(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
-    """用于 scope=body/full 或 trafilatura 失败时的 fallback。"""
-    root: Tag = soup
+def prepare_body(soup: BeautifulSoup, view: Dict[str, Any]) -> Tag:
+    """用于 strategy=none，返回处理后的 body。"""
+    root: Tag = soup.body or soup
 
-    # 合并所有要移除的标签，一次性遍历
-    all_remove_tags = set(CORE_REMOVE_TAGS)
-    if not view.get("keep_media", False):
-        all_remove_tags.update(MEDIA_REMOVE_TAGS)
-    for tag_name in all_remove_tags:
+    # 移除 script/style 等基础噪音
+    for tag_name in CORE_REMOVE_TAGS:
         for tag in root.find_all(tag_name):
             tag.decompose()
 
-    # scope 选择（content 在 render_view 已由 trafilatura 处理）
-    scope = view.get("scope") or "content"
-    if scope == "content":
-        selected = root.select_one(CONTENT_ROOT_SELECTORS)
-        if selected is None:
-            selected = root.body or root
-        if selected is not root:
-            root = selected
-    elif scope == "body":
-        selected = root.body or root
-        if selected is not root:
-            root = selected
-    elif scope != "full":
-        raise ValueError(f"Unsupported scope: {scope}")
-
-    # selector 也直接用
-    selector = view.get("selector")
-    if selector:
-        try:
-            selected = root.select_one(selector)
-        except Exception:
-            selected = None
-        if selected is not None and selected is not root:
-            root = selected
-
-    for css_selector in view.get("strip", []):
-        try:
-            for tag in root.select(css_selector):
+    # 不保留媒体时移除
+    if not view.get("keep_media", False):
+        for tag_name in MEDIA_REMOVE_TAGS:
+            for tag in root.find_all(tag_name):
                 tag.decompose()
-        except Exception:
-            continue
 
     return root
 
 
 def render_view(html: str, view: Dict[str, Any]) -> str:
-    scope = view.get("scope") or "content"
+    strategy = view.get("strategy") or "strict"
     want_markdown = view.get("markdownify", True)
     keep_media = view.get("keep_media", False)
 
-    # scope=content 时优先用 trafilatura 智能提取（自动剔除广告/噪音）
-    if scope == "content":
-        output_format = "markdown" if want_markdown else "txt"
-        extracted = trafilatura.extract(
-            html,
-            output_format=output_format,
-            include_comments=False,
-            include_tables=True,
-            include_images=keep_media,
-            favor_precision=True,  # 精确模式，避免误删正文
-        )
-        if extracted:
-            return extracted
-        # trafilatura 失败，fallback 到 selector 逻辑
+    # strategy=none 时返回完整 body（不智能提取）
+    if strategy == "none":
+        soup = BeautifulSoup(html, "html.parser")
+        prepared_root = prepare_body(soup, view)
+        if want_markdown:
+            return markdownify(str(prepared_root))
+        return str(prepared_root)
 
-    # scope=body/full 或 trafilatura 失败时，用原有逻辑
+    # strategy=strict/loose 用 trafilatura 智能提取
+    output_format = "markdown" if want_markdown else "txt"
+    favor_precision = strategy == "strict"
+    favor_recall = strategy == "loose"
+
+    extracted = trafilatura.extract(
+        html,
+        output_format=output_format,
+        include_comments=False,
+        include_tables=True,
+        include_images=keep_media,
+        favor_precision=favor_precision,
+        favor_recall=favor_recall,
+    )
+    if extracted:
+        return extracted
+
+    # trafilatura 失败，fallback 到 body 处理
     soup = BeautifulSoup(html, "html.parser")
-    prepared_root = prepare_root(soup, view)
+    prepared_root = prepare_body(soup, view)
     if want_markdown:
         return markdownify(str(prepared_root))
     return str(prepared_root)

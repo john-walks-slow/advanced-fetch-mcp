@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION
 
 FetchMode = Literal["dynamic", "static"]
-Scope = Literal["full", "body", "content"]
+ExtractStrategy = Literal["strict", "loose", "none"]
 
 UrlParam = Annotated[str, Field(description="目标网址。")]
 ModeParam = Annotated[
@@ -33,23 +33,11 @@ MarkdownifyParam = Annotated[
     bool,
     Field(default=True, description="是否转换成 Markdown；为 false 时返回原始 HTML。"),
 ]
-ScopeParam = Annotated[
-    Scope,
+StrategyParam = Annotated[
+    ExtractStrategy,
     Field(
-        default="content",
-        description="基础范围。可选 full（全页）、body（body）、content（智能选择正文）。",
-    ),
-]
-SelectorParam = Annotated[
-    Optional[str],
-    Field(
-        default=None, description="在基础范围内，再用 CSS selector 选出更小的子区域。"
-    ),
-]
-StripParam = Annotated[
-    list[str],
-    Field(
-        default_factory=list, description="在当前范围内，按这些 CSS selector 剔除节点。"
+        default="strict",
+        description="提取策略。strict 精确提取正文（避免误删）；loose 尽可能保留内容；none 返回完整 body。",
     ),
 ]
 KeepMediaParam = Annotated[
@@ -110,9 +98,7 @@ class AdvancedFetchParams(BaseModel):
     wait_for: WaitForParam = 0
     timeout: TimeoutParam = None
     markdownify: MarkdownifyParam = True
-    scope: ScopeParam = "content"
-    selector: SelectorParam = None
-    strip: StripParam
+    strategy: StrategyParam = "strict"
     keep_media: KeepMediaParam = False
     cursor: CursorParam = None
     max_length: MaxLengthParam = DEFAULT_MAX_LENGTH

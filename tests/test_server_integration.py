@@ -31,8 +31,7 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 url="https://example.com",
                 mode="dynamic",
                 markdownify=False,
-                scope="body",
-                strip=[".ad"],
+                strategy="none",
                 keep_media=True,
                 max_length=123,
                 refresh_cache=True,
@@ -42,8 +41,7 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(passed_request.url, "https://example.com")
         self.assertEqual(passed_request.mode, "dynamic")
         self.assertFalse(passed_request.markdownify)
-        self.assertEqual(passed_request.scope, "body")
-        self.assertEqual(passed_request.strip, [".ad"])
+        self.assertEqual(passed_request.strategy, "none")
         self.assertTrue(passed_request.keep_media)
         self.assertEqual(passed_request.max_length, 123)
         self.assertTrue(passed_request.refresh_cache)

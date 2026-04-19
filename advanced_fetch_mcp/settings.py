@@ -39,10 +39,6 @@ USER_AGENT = (
 )
 CORE_REMOVE_TAGS = ["script", "style", "head", "noscript", "template"]
 MEDIA_REMOVE_TAGS = ["video", "audio", "img", "canvas", "svg", "picture", "source"]
-CONTENT_ROOT_SELECTORS = (
-    "main, article, [role='main'], #content, .content, .main, .article-body, "
-    ".post-content, .entry-content, .post-body"
-)
 
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"

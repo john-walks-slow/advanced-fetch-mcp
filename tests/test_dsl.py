@@ -10,8 +10,7 @@ class DSLTests(unittest.TestCase):
     def test_defaults(self):
         request = AdvancedFetchParams(url="https://example.com")
         self.assertEqual(request.mode, "dynamic")
-        self.assertEqual(request.scope, "content")
-        self.assertEqual(request.strip, [])
+        self.assertEqual(request.strategy, "strict")
         self.assertFalse(request.keep_media)
 
     def test_find_in_page_optional(self):
