@@ -1,7 +1,11 @@
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.fetch-browser-profile/
 .env
+.env.local
+.env.*.local
 cookies/
 site.yaml
 sites.yaml

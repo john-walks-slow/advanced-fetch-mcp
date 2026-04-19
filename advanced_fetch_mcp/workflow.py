@@ -5,7 +5,13 @@ from typing import Any, Dict, Tuple
 
 from .dsl import AdvancedFetchParams
 from .extract import build_view_config, continue_in_text, render_view, search_in_text
-from .fetch import FetchResult, evaluate_script_on_page, fetch_url, get_cached_fetch, store_cached_fetch
+from .fetch import (
+    FetchResult,
+    evaluate_script_on_page,
+    fetch_url,
+    get_cached_fetch,
+    store_cached_fetch,
+)
 from .sampling import run_prompt_extraction
 from .settings import DEFAULT_MAX_LENGTH, MAX_FIND_MATCHES, logger
 
@@ -57,8 +63,19 @@ def _build_warnings(fetch_result: FetchResult) -> list[str]:
     return warnings
 
 
-def _build_public_result(*, fetch_result: FetchResult, result_payload: Any, warnings: list[str], truncated: bool, find_result: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    result: Dict[str, Any] = {"success": True, "final_url": fetch_result.final_url, "result": result_payload}
+def _build_public_result(
+    *,
+    fetch_result: FetchResult,
+    result_payload: Any,
+    warnings: list[str],
+    truncated: bool,
+    find_result: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "success": True,
+        "final_url": fetch_result.final_url,
+        "result": result_payload,
+    }
     if fetch_result.timed_out:
         result["timed_out"] = True
         if fetch_result.timeout_stage:
@@ -84,11 +101,25 @@ def _build_public_result(*, fetch_result: FetchResult, result_payload: Any, warn
     return result
 
 
-async def execute_advanced_fetch(*, url: str, ctx: Any, request: AdvancedFetchParams) -> Dict[str, Any]:
+async def execute_advanced_fetch(
+    *,
+    url: str,
+    ctx: Any,
+    request: AdvancedFetchParams,
+) -> Dict[str, Any]:
     effective_max_length = request.max_length or DEFAULT_MAX_LENGTH
 
     cache_allowed = request.evaluateJS is None
-    cached = get_cached_fetch(url) if cache_allowed and not request.refresh_cache else None
+    cached = (
+        get_cached_fetch(
+            url,
+            request.mode,
+            request.wait_for,
+            request.require_user_intervention,
+        )
+        if cache_allowed and not request.refresh_cache
+        else None
+    )
 
     if cached is not None:
         final_url, html = cached
@@ -102,7 +133,14 @@ async def execute_advanced_fetch(*, url: str, ctx: Any, request: AdvancedFetchPa
             request.require_user_intervention,
         )
         if request.evaluateJS is None:
-            store_cached_fetch(url, fetch_result.final_url, fetch_result.html)
+            store_cached_fetch(
+                url,
+                request.mode,
+                request.wait_for,
+                request.require_user_intervention,
+                fetch_result.final_url,
+                fetch_result.html,
+            )
 
     warnings = _build_warnings(fetch_result)
 
@@ -113,17 +151,34 @@ async def execute_advanced_fetch(*, url: str, ctx: Any, request: AdvancedFetchPa
             require_user_intervention=request.require_user_intervention,
             script=request.evaluateJS,
         )
-        result_text, truncated = _truncate_text_middle(_serialize_result_value(value), effective_max_length)
-        return _build_public_result(fetch_result=fetch_result, result_payload=result_text, warnings=warnings, truncated=truncated)
+        result_text, truncated = _truncate_text_middle(
+            _serialize_result_value(value),
+            effective_max_length,
+        )
+        return _build_public_result(
+            fetch_result=fetch_result,
+            result_payload=result_text,
+            warnings=warnings,
+            truncated=truncated,
+        )
 
     view = build_view_config(request.model_dump())
     rendered = render_view(fetch_result.html, view)
 
     if request.find_in_page is not None:
         if request.find_in_page.query is not None:
-            find_result = search_in_text(rendered, request.find_in_page.query, effective_max_length, request.find_in_page.regex)
+            find_result = search_in_text(
+                rendered,
+                request.find_in_page.query,
+                effective_max_length,
+                request.find_in_page.regex,
+            )
         else:
-            find_result = continue_in_text(rendered, request.find_in_page.cursor or "", effective_max_length)
+            find_result = continue_in_text(
+                rendered,
+                request.find_in_page.cursor or "",
+                effective_max_length,
+            )
         if find_result["matches_truncated"]:
             warnings.append(FIND_MATCHES_WARNING)
         return _build_public_result(
@@ -141,13 +196,27 @@ async def execute_advanced_fetch(*, url: str, ctx: Any, request: AdvancedFetchPa
                 source_text=rendered,
                 prompt=request.prompt,
             )
-            result_text = "" if prompt_output.get("value") is None else str(prompt_output["value"])
+            result_text = (
+                ""
+                if prompt_output.get("value") is None
+                else str(prompt_output["value"])
+            )
         except Exception as exc:
             logger.warning("[Prompt] 失败，回退到原始视图文本：%s", exc)
             warnings.append(f"prompt 处理失败，已回退到原始文本：{exc}")
             result_text = rendered
         result_text, truncated = _truncate_text_middle(result_text, effective_max_length)
-        return _build_public_result(fetch_result=fetch_result, result_payload=result_text, warnings=warnings, truncated=truncated)
+        return _build_public_result(
+            fetch_result=fetch_result,
+            result_payload=result_text,
+            warnings=warnings,
+            truncated=truncated,
+        )
 
     result_text, truncated = _truncate_text_middle(rendered, effective_max_length)
-    return _build_public_result(fetch_result=fetch_result, result_payload=result_text, warnings=warnings, truncated=truncated)
+    return _build_public_result(
+        fetch_result=fetch_result,
+        result_payload=result_text,
+        warnings=warnings,
+        truncated=truncated,
+    )

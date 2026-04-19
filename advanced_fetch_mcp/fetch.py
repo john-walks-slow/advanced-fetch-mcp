@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from typing import Literal, Optional, Tuple, Any
 
@@ -10,7 +11,13 @@ from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 from .browser import browser_manager
 from .detection import build_intervention_script, wait_for_intervention_end
 from .dsl import FetchMode
-from .settings import NAVIGATION_TIMEOUT_MS, NETWORK_IDLE_TIMEOUT_MS, STATIC_FETCH_TIMEOUT_SECONDS, USER_AGENT, logger
+from .settings import (
+    NAVIGATION_TIMEOUT_MS,
+    NETWORK_IDLE_TIMEOUT_MS,
+    STATIC_FETCH_TIMEOUT_SECONDS,
+    USER_AGENT,
+    logger,
+)
 
 TimeoutStage = Literal["goto", "networkidle", "static_request"]
 
@@ -24,15 +31,44 @@ class FetchResult:
     intervention_ended_by: Optional[str] = None
 
 
-_FETCH_CACHE: dict[str, Tuple[str, str]] = {}
+_FETCH_CACHE: dict[tuple[str, FetchMode, float, bool], Tuple[str, str]] = {}
+_FUNCTION_LIKE_SCRIPT_RE = re.compile(
+    r"^\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)"
+)
 
 
-def get_cached_fetch(url: str) -> Optional[Tuple[str, str]]:
-    return _FETCH_CACHE.get(url)
+def _cache_key(
+    url: str,
+    mode: FetchMode,
+    wait_for: float,
+    require_user_intervention: bool,
+) -> tuple[str, FetchMode, float, bool]:
+    return (url, mode, wait_for, require_user_intervention)
 
 
-def store_cached_fetch(url: str, final_url: str, html: str) -> None:
-    _FETCH_CACHE[url] = (final_url, html)
+def get_cached_fetch(
+    url: str,
+    mode: FetchMode,
+    wait_for: float,
+    require_user_intervention: bool,
+) -> Optional[Tuple[str, str]]:
+    return _FETCH_CACHE.get(
+        _cache_key(url, mode, wait_for, require_user_intervention)
+    )
+
+
+def store_cached_fetch(
+    url: str,
+    mode: FetchMode,
+    wait_for: float,
+    require_user_intervention: bool,
+    final_url: str,
+    html: str,
+) -> None:
+    _FETCH_CACHE[_cache_key(url, mode, wait_for, require_user_intervention)] = (
+        final_url,
+        html,
+    )
 
 
 def static_fetch(url: str) -> FetchResult:
@@ -45,8 +81,24 @@ def static_fetch(url: str) -> FetchResult:
         response.raise_for_status()
         return FetchResult(html=response.text, final_url=response.url)
     except requests.Timeout:
-        logger.warning("[StaticFetch] 请求超时，返回空内容并标记 timeout_stage=static_request")
-        return FetchResult(html="", final_url=url, timed_out=True, timeout_stage="static_request")
+        logger.warning(
+            "[StaticFetch] 请求超时，返回空内容并标记 timeout_stage=static_request"
+        )
+        return FetchResult(
+            html="",
+            final_url=url,
+            timed_out=True,
+            timeout_stage="static_request",
+        )
+
+
+def _build_page_evaluate_script(script: str) -> str:
+    stripped = script.strip()
+    if _FUNCTION_LIKE_SCRIPT_RE.match(stripped):
+        return stripped
+    if "return" in stripped or "\n" in stripped or ";" in stripped:
+        return f"() => {{\n{script}\n}}"
+    return f"() => (\n{script}\n)"
 
 
 async def _capture_current_page(page: Page) -> Tuple[str, str]:
@@ -83,7 +135,11 @@ async def dynamic_fetch(
 
         goto_completed = False
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=NAVIGATION_TIMEOUT_MS,
+            )
             goto_completed = True
         except PlaywrightTimeoutError:
             timed_out = True
@@ -96,7 +152,10 @@ async def dynamic_fetch(
             if wait_for > 0:
                 await asyncio.sleep(wait_for)
             try:
-                await page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS)
+                await page.wait_for_load_state(
+                    "networkidle",
+                    timeout=NETWORK_IDLE_TIMEOUT_MS,
+                )
             except PlaywrightTimeoutError:
                 timed_out = True
                 timeout_stage = "networkidle"
@@ -155,18 +214,25 @@ async def evaluate_script_on_page(
             await context.add_init_script(build_intervention_script())
 
         page = await context.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=NAVIGATION_TIMEOUT_MS)
+        await page.goto(
+            url,
+            wait_until="domcontentloaded",
+            timeout=NAVIGATION_TIMEOUT_MS,
+        )
         if wait_for > 0:
             await asyncio.sleep(wait_for)
         try:
-            await page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS)
+            await page.wait_for_load_state(
+                "networkidle",
+                timeout=NETWORK_IDLE_TIMEOUT_MS,
+            )
         except Exception:
             pass
 
         if require_user_intervention:
             await wait_for_intervention_end(page)
 
-        return await page.evaluate(script)
+        return await page.evaluate(_build_page_evaluate_script(script))
     finally:
         if page and not page.is_closed():
             try:

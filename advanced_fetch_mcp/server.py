@@ -17,6 +17,47 @@ load_dotenv(ENV_FILE)
 mcp = FastMCP("AdvancedFetchMCP")
 
 
+def _build_request_payload(
+    *,
+    mode: str,
+    wait_for: float,
+    require_user_intervention: bool,
+    markdownify: bool,
+    scope: str,
+    selector: Optional[str],
+    strip: Optional[list[str]],
+    keep_media: bool,
+    prompt: Optional[str],
+    find_in_page: Optional[FindInPageOptions],
+    evaluateJS: Optional[str],
+    max_length: int,
+    refresh_cache: bool,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "mode": mode,
+        "wait_for": wait_for,
+        "require_user_intervention": require_user_intervention,
+        "max_length": max_length,
+        "refresh_cache": refresh_cache,
+    }
+    if evaluateJS is not None:
+        payload["evaluateJS"] = evaluateJS
+        return payload
+
+    payload.update(
+        {
+            "markdownify": markdownify,
+            "scope": scope,
+            "selector": selector,
+            "strip": strip or [],
+            "keep_media": keep_media,
+            "prompt": prompt,
+            "find_in_page": find_in_page,
+        }
+    )
+    return payload
+
+
 @mcp.tool()
 async def advanced_fetch(
     url: Annotated[str, Field(description="目标网址。")],
@@ -35,14 +76,14 @@ async def advanced_fetch(
     max_length: Annotated[int, Field(description="文本结果长度上限。普通提取、prompt 和 evaluateJS 会按这个长度截断；搜索模式下它表示结果窗口大小。")] = 20000,
     refresh_cache: Annotated[bool, Field(description="是否忽略当前 URL 的已有缓存并重新抓取；重新抓到的结果仍会写回缓存。evaluateJS 模式忽略缓存。")] = False,
 ) -> Dict[str, Any]:
-    request = AdvancedFetchParams(
+    request_payload = _build_request_payload(
         mode=mode,
         wait_for=wait_for,
         require_user_intervention=require_user_intervention,
         markdownify=markdownify,
         scope=scope,
         selector=selector,
-        strip=strip or [],
+        strip=strip,
         keep_media=keep_media,
         prompt=prompt,
         find_in_page=find_in_page,
@@ -50,6 +91,7 @@ async def advanced_fetch(
         max_length=max_length,
         refresh_cache=refresh_cache,
     )
+    request = AdvancedFetchParams(**request_payload)
     return await execute_advanced_fetch(url=url, ctx=ctx, request=request)
 
 

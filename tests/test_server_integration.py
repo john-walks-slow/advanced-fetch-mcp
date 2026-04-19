@@ -57,3 +57,17 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         request = exec_mock.await_args.kwargs["request"]
         self.assertEqual(request.strip, [])
+
+    async def test_evaluate_js_does_not_include_default_view_arguments(self):
+        server = self._import_server()
+        with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
+            result = await server.advanced_fetch(
+                url="https://example.com",
+                ctx=object(),
+                evaluateJS="return document.title;",
+            )
+        self.assertEqual(result, {"success": True})
+        request = exec_mock.await_args.kwargs["request"]
+        self.assertEqual(request.evaluateJS, "return document.title;")
+        self.assertIsNone(request.prompt)
+        self.assertIsNone(request.find_in_page)

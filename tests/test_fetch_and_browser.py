@@ -4,10 +4,20 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from advanced_fetch_mcp.browser import BrowserManager, _copy_profile_template
-from advanced_fetch_mcp.fetch import FetchResult, fetch_url
+from advanced_fetch_mcp.fetch import (
+    FetchResult,
+    _FETCH_CACHE,
+    _build_page_evaluate_script,
+    fetch_url,
+    get_cached_fetch,
+    store_cached_fetch,
+)
 
 
 class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _FETCH_CACHE.clear()
+
     async def test_fetch_url_forces_dynamic_when_intervention_requested(self):
         with patch("advanced_fetch_mcp.fetch.dynamic_fetch", new=AsyncMock(return_value=FetchResult(html="x", final_url="u"))) as mock_dynamic:
             result = await fetch_url("https://example.com", "static", 0, True)
@@ -59,3 +69,21 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
             (dst / "Local Storage").mkdir()
             _copy_profile_template(src, dst)
             self.assertTrue((dst / "Local Storage" / "leveldb" / "000003.log").exists())
+
+    def test_cache_is_partitioned_by_mode_and_wait_settings(self):
+        store_cached_fetch("https://example.com", "static", 0, False, "https://static", "<main>static</main>")
+        self.assertEqual(
+            get_cached_fetch("https://example.com", "static", 0, False),
+            ("https://static", "<main>static</main>"),
+        )
+        self.assertIsNone(get_cached_fetch("https://example.com", "dynamic", 0, False))
+        self.assertIsNone(get_cached_fetch("https://example.com", "static", 1, False))
+
+    def test_evaluate_script_wraps_function_body_style_snippets(self):
+        wrapped = _build_page_evaluate_script("return { title: document.title };")
+        self.assertIn("() => {", wrapped)
+        self.assertIn("return { title: document.title };", wrapped)
+
+    def test_evaluate_script_keeps_function_style_snippets(self):
+        script = "() => document.title"
+        self.assertEqual(_build_page_evaluate_script(script), script)

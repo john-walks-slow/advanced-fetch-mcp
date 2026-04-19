@@ -96,7 +96,14 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             result = await execute_advanced_fetch(url="https://example.com", ctx=object(), request=request)
         get_cache_mock.assert_not_called()
         fetch_mock.assert_awaited_once()
-        store_cache_mock.assert_called_once_with("https://example.com", "https://fresh", "<main>new</main>")
+        store_cache_mock.assert_called_once_with(
+            "https://example.com",
+            "dynamic",
+            0,
+            False,
+            "https://fresh",
+            "<main>new</main>",
+        )
         self.assertEqual(result["final_url"], "https://fresh")
         self.assertIn("new", result["result"])
 
@@ -148,7 +155,18 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             patch("advanced_fetch_mcp.workflow.fetch_url", new=AsyncMock()) as fetch_mock,
         ):
             result = await execute_advanced_fetch(url="https://example.com", ctx=object(), request=request)
-        get_cache_mock.assert_called_once_with("https://example.com")
+        get_cache_mock.assert_called_once_with("https://example.com", "dynamic", 0, False)
+        fetch_mock.assert_not_awaited()
+        self.assertEqual(result["final_url"], "https://cached")
+
+    async def test_cache_lookup_is_scoped_by_fetch_mode_and_timing(self):
+        request = AdvancedFetchParams(mode="static", wait_for=2, require_user_intervention=True)
+        with (
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=("https://cached", "<main>cached</main>")) as get_cache_mock,
+            patch("advanced_fetch_mcp.workflow.fetch_url", new=AsyncMock()) as fetch_mock,
+        ):
+            result = await execute_advanced_fetch(url="https://example.com", ctx=object(), request=request)
+        get_cache_mock.assert_called_once_with("https://example.com", "static", 2, True)
         fetch_mock.assert_not_awaited()
         self.assertEqual(result["final_url"], "https://cached")
 
