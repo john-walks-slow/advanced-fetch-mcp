@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .env_loader import load_project_dotenv
+
+_LOADED_ENV_FILE = load_project_dotenv()
+
 __all__ = ["mcp", "cleanup"]
 
 
