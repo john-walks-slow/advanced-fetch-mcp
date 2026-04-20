@@ -28,6 +28,11 @@ def env_optional_str(name: str) -> Optional[str]:
     return value or None
 
 
+def env_choice(name: str, default: str, allowed: set[str]) -> str:
+    value = (os.getenv(name, default) or default).strip().lower()
+    return value if value in allowed else default
+
+
 def seconds_to_ms(seconds: float) -> int:
     return max(1, int(seconds * 1000))
 
@@ -126,6 +131,7 @@ ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", True)
 PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", "16000"))
 MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", "8"))
 FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", "240"))
+SCHEMA_LANGUAGE = env_choice("SCHEMA_LANGUAGE", "zh", {"zh", "en"})
 
 BROWSER_CHANNEL = (os.getenv("BROWSER_CHANNEL", "chrome") or "chrome").strip() or "chrome"
 BROWSER_SESSION_MODE = _env_session_mode()
@@ -141,7 +147,7 @@ AUTH_STORAGE_STATE_PATH = Path(
         str(Path.home() / ".advanced-fetch-auth" / "storage_state.json"),
     )
 ).expanduser()
-BROWSER_LOCALE = os.getenv("BROWSER_LOCALE", "en-US").strip() or "en-US"
+BROWSER_LOCALE = env_optional_str("BROWSER_LOCALE")
 BROWSER_TIMEZONE_ID = env_optional_str("BROWSER_TIMEZONE_ID")
 BROWSER_COLOR_SCHEME = os.getenv("BROWSER_COLOR_SCHEME", "light").strip() or "light"
 BROWSER_VIEWPORT_WIDTH = max(320, int(os.getenv("BROWSER_VIEWPORT_WIDTH", "1366")))
