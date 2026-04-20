@@ -13,8 +13,11 @@ except Exception:  # pragma: no cover - optional dependency
     Stealth = None
 
 
-def _language_overrides() -> tuple[str, ...]:
-    locale = (BROWSER_LOCALE or "en-US").replace("_", "-")
+def _language_overrides() -> Optional[tuple[str, ...]]:
+    if not BROWSER_LOCALE:
+        return None
+
+    locale = BROWSER_LOCALE.replace("_", "-")
     parts = [locale]
     base = locale.split("-", 1)[0]
     if base and base not in parts:
@@ -35,11 +38,15 @@ def _build_stealth() -> Optional[object]:
             "[Browser] 未安装 playwright-stealth，auth 模式将继续运行，但不会启用 stealth。可执行: pip install playwright-stealth"
         )
         return None
-    return Stealth(
-        init_scripts_only=True,
-        navigator_languages_override=_language_overrides(),
-        navigator_user_agent_override=USER_AGENT,
-    )
+
+    kwargs = {
+        "init_scripts_only": True,
+        "navigator_user_agent_override": USER_AGENT,
+    }
+    languages = _language_overrides()
+    if languages is not None:
+        kwargs["navigator_languages_override"] = languages
+    return Stealth(**kwargs)
 
 
 async def apply_auth_stealth(context: BrowserContext) -> bool:
