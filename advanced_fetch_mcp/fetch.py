@@ -3,24 +3,32 @@ from __future__ import annotations
 import asyncio
 import re
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple, Any
+from typing import Any, Literal, Optional, Tuple
 
 import requests
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .browser import browser_manager
 from .detection import build_intervention_script, wait_for_intervention_end
-from .params import FetchMode
+from .params import FetchMode, WaitForValue
+from .extract import render_auto_wait_text
 from .settings import (
-    DEFAULT_TIMEOUT_SECONDS,
-    NAVIGATION_TIMEOUT_MS,
-    NETWORK_IDLE_TIMEOUT_MS,
+    AUTO_WAIT_TIMEOUT_SECONDS,
+    NAVIGATION_TIMEOUT_SECONDS,
+    NETWORK_IDLE_TIMEOUT_SECONDS,
     STATIC_FETCH_TIMEOUT_SECONDS,
     USER_AGENT,
+    IGNORE_SSL_ERRORS,
+    get_requests_proxies,
+    seconds_to_ms,
     logger,
 )
 
 TimeoutStage = Literal["goto", "networkidle", "static_request"]
+
+_AUTO_WAIT_POLL_INTERVAL_SECONDS = 0.25
+_AUTO_WAIT_STABLE_ROUNDS = 2
+_AUTO_WAIT_SAMPLE_EDGE_CHARS = 200
 
 
 @dataclass(slots=True)
@@ -50,16 +58,24 @@ def store_cached_fetch(url: str, mode: FetchMode, final_url: str, html: str) -> 
     _FETCH_CACHE[_cache_key(url, mode)] = (final_url, html)
 
 
+
 def static_fetch(url: str, timeout: Optional[float] = None) -> FetchResult:
     effective_timeout = timeout if timeout is not None else STATIC_FETCH_TIMEOUT_SECONDS
+
     try:
-        response = requests.get(
-            url,
-            headers={"User-Agent": USER_AGENT},
-            timeout=effective_timeout,
-        )
-        response.raise_for_status()
-        return FetchResult(html=response.text, final_url=response.url)
+        with requests.Session() as session:
+            session.trust_env = False
+            if USER_AGENT:
+                session.headers["User-Agent"] = USER_AGENT
+
+            response = session.get(
+                url,
+                timeout=effective_timeout,
+                proxies=get_requests_proxies(url),
+                verify=not IGNORE_SSL_ERRORS,
+            )
+            response.raise_for_status()
+            return FetchResult(html=response.text, final_url=response.url)
     except requests.Timeout:
         logger.warning(
             "[StaticFetch] 请求超时，返回空内容并标记 timeout_stage=static_request"
@@ -86,155 +102,228 @@ async def _capture_current_page(page: Page) -> Tuple[str, str]:
         html = await page.content()
     except Exception:
         html = ""
+
     try:
         final_url = page.url
     except Exception:
         final_url = ""
+
     return html, final_url
+
+
+async def _sample_page_extracted_text(page: Page) -> str:
+    html, _ = await _capture_current_page(page)
+    return await asyncio.to_thread(render_auto_wait_text, html)
+
+
+def _is_extracted_text_stable(current: str, previous: str) -> bool:
+    current_text = current.strip()
+    previous_text = previous.strip()
+    if not current_text or not previous_text:
+        return False
+    if current_text == previous_text:
+        return True
+
+    previous_length = max(1, len(previous_text))
+    length_delta = abs(len(current_text) - len(previous_text))
+    if length_delta > max(48, int(previous_length * 0.03)):
+        return False
+
+    edge = _AUTO_WAIT_SAMPLE_EDGE_CHARS
+    return (
+        current_text[:edge] == previous_text[:edge]
+        and current_text[-edge:] == previous_text[-edge:]
+    )
+
+
+async def _auto_wait_for_content(page: Page) -> None:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + AUTO_WAIT_TIMEOUT_SECONDS
+    previous_extracted_text: Optional[str] = None
+    stable_rounds = 0
+
+    while True:
+        current_extracted_text = await _sample_page_extracted_text(page)
+
+        if previous_extracted_text is not None:
+            stable_rounds = (
+                stable_rounds + 1
+                if _is_extracted_text_stable(current_extracted_text, previous_extracted_text)
+                else 0
+            )
+
+        if stable_rounds >= _AUTO_WAIT_STABLE_ROUNDS:
+            logger.info("[DynamicFetch] auto wait 结束：抽取结果已趋于稳定")
+            return
+
+        if loop.time() >= deadline:
+            logger.info("[DynamicFetch] auto wait 到达超时上限，返回当前页面")
+            return
+
+        previous_extracted_text = current_extracted_text
+        await asyncio.sleep(_AUTO_WAIT_POLL_INTERVAL_SECONDS)
+
+
+async def _apply_post_load_wait(page: Page, wait_for: WaitForValue) -> None:
+    if wait_for == "auto":
+        await _auto_wait_for_content(page)
+        return
+    if wait_for > 0:
+        await asyncio.sleep(wait_for)
 
 
 async def dynamic_fetch(
     url: str,
-    wait_for: float = 0,
+    wait_for: WaitForValue = "auto",
     require_user_intervention: bool = False,
     timeout: Optional[float] = None,
 ) -> FetchResult:
-    effective_timeout_ms = (
-        int(timeout * 1000) if timeout is not None else NAVIGATION_TIMEOUT_MS
+    effective_timeout_ms = seconds_to_ms(
+        timeout if timeout is not None else NAVIGATION_TIMEOUT_SECONDS
     )
-    network_idle_timeout_ms = (
-        int(timeout * 1000) if timeout is not None else NETWORK_IDLE_TIMEOUT_MS
+    network_idle_timeout_ms = seconds_to_ms(
+        timeout if timeout is not None else NETWORK_IDLE_TIMEOUT_SECONDS
     )
-    context = None
+
     page: Optional[Page] = None
     timed_out = False
     timeout_stage: Optional[TimeoutStage] = None
     intervention_ended_by: Optional[str] = None
 
-    try:
-        headless = False if require_user_intervention else True
-        context = await browser_manager.get_context(headless=headless)
+    headless = not require_user_intervention
 
-        if require_user_intervention:
-            await context.add_init_script(build_intervention_script())
-
-        page = await context.new_page()
-
-        goto_completed = False
+    async with browser_manager.open_session(
+        headless=headless,
+    ) as context:
         try:
-            await page.goto(
-                url,
-                wait_until="domcontentloaded",
-                timeout=effective_timeout_ms,
-            )
-            goto_completed = True
-        except PlaywrightTimeoutError:
-            timed_out = True
-            timeout_stage = "goto"
-            logger.warning("[DynamicFetch] goto 超时，立即抓取当前内容")
-        except Exception as exc:
-            logger.warning("[DynamicFetch] goto 失败，立即抓取当前内容：%s", exc)
+            if require_user_intervention:
+                await context.add_init_script(build_intervention_script())
 
-        if goto_completed:
-            if wait_for > 0:
-                await asyncio.sleep(wait_for)
+            page = await context.new_page()
+
+            goto_completed = False
             try:
-                await page.wait_for_load_state(
-                    "networkidle",
-                    timeout=network_idle_timeout_ms,
+                await page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=effective_timeout_ms,
                 )
+                goto_completed = True
             except PlaywrightTimeoutError:
                 timed_out = True
-                timeout_stage = "networkidle"
-                logger.warning("[DynamicFetch] networkidle 超时，立即抓取当前内容")
+                timeout_stage = "goto"
+                logger.warning("[DynamicFetch] goto 超时，立即抓取当前内容")
             except Exception as exc:
-                logger.warning(
-                    "[DynamicFetch] 等待 networkidle 失败，立即抓取当前内容：%s", exc
+                logger.warning("[DynamicFetch] goto 失败，立即抓取当前内容：%s", exc)
+
+            if goto_completed:
+                try:
+                    await page.wait_for_load_state(
+                        "networkidle",
+                        timeout=network_idle_timeout_ms,
+                    )
+                except PlaywrightTimeoutError:
+                    timed_out = True
+                    timeout_stage = "networkidle"
+                    logger.warning("[DynamicFetch] networkidle 超时，立即抓取当前内容")
+                except Exception as exc:
+                    logger.warning(
+                        "[DynamicFetch] 等待 networkidle 失败，立即抓取当前内容：%s",
+                        exc,
+                    )
+
+                await _apply_post_load_wait(page, wait_for)
+
+            if require_user_intervention:
+                html, final_url, intervention_ended_by = (
+                    await wait_for_intervention_end(page)
                 )
-
-        if require_user_intervention:
-            html, final_url, intervention_ended_by = await wait_for_intervention_end(
-                page
-            )
-            if not html:
+                if not html:
+                    html, final_url = await _capture_current_page(page)
+            else:
                 html, final_url = await _capture_current_page(page)
-        else:
-            html, final_url = await _capture_current_page(page)
 
-        return FetchResult(
-            html=html,
-            final_url=final_url,
-            timed_out=timed_out,
-            timeout_stage=timeout_stage,
-            intervention_ended_by=intervention_ended_by,
-        )
-    finally:
-        if page and not page.is_closed():
-            try:
-                await page.close()
-            except Exception:
-                pass
+            return FetchResult(
+                html=html,
+                final_url=final_url,
+                timed_out=timed_out,
+                timeout_stage=timeout_stage,
+                intervention_ended_by=intervention_ended_by,
+            )
+        finally:
+            if page and not page.is_closed():
+                try:
+                    await page.close()
+                except Exception:
+                    pass
 
 
 async def fetch_url(
     url: str,
     mode: FetchMode,
-    wait_for: float,
+    wait_for: WaitForValue,
     require_user_intervention: bool,
     timeout: Optional[float] = None,
 ) -> FetchResult:
     if mode == "dynamic" or require_user_intervention:
-        return await dynamic_fetch(url, wait_for, require_user_intervention, timeout)
+        return await dynamic_fetch(
+            url=url,
+            wait_for=wait_for,
+            require_user_intervention=require_user_intervention,
+            timeout=timeout,
+            )
     return static_fetch(url, timeout)
 
 
 async def evaluate_script_on_page(
     *,
     url: str,
-    wait_for: float,
+    wait_for: WaitForValue,
     require_user_intervention: bool,
     script: str,
     timeout: Optional[float] = None,
 ) -> Any:
-    effective_timeout_ms = (
-        int(timeout * 1000) if timeout is not None else NAVIGATION_TIMEOUT_MS
+    effective_timeout_ms = seconds_to_ms(
+        timeout if timeout is not None else NAVIGATION_TIMEOUT_SECONDS
     )
-    network_idle_timeout_ms = (
-        int(timeout * 1000) if timeout is not None else NETWORK_IDLE_TIMEOUT_MS
+    network_idle_timeout_ms = seconds_to_ms(
+        timeout if timeout is not None else NETWORK_IDLE_TIMEOUT_SECONDS
     )
+
     page: Optional[Page] = None
-    context = None
+    headless = not require_user_intervention
 
-    try:
-        headless = False if require_user_intervention else True
-        context = await browser_manager.get_context(headless=headless)
-
-        if require_user_intervention:
-            await context.add_init_script(build_intervention_script())
-
-        page = await context.new_page()
-        await page.goto(
-            url,
-            wait_until="domcontentloaded",
-            timeout=effective_timeout_ms,
-        )
-        if wait_for > 0:
-            await asyncio.sleep(wait_for)
+    async with browser_manager.open_session(
+        headless=headless,
+    ) as context:
         try:
-            await page.wait_for_load_state(
-                "networkidle",
-                timeout=network_idle_timeout_ms,
+            if require_user_intervention:
+                await context.add_init_script(build_intervention_script())
+
+            page = await context.new_page()
+            await page.goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=effective_timeout_ms,
             )
-        except Exception:
-            pass
 
-        if require_user_intervention:
-            await wait_for_intervention_end(page)
-
-        return await page.evaluate(_build_page_evaluate_script(script))
-    finally:
-        if page and not page.is_closed():
             try:
-                await page.close()
+                await page.wait_for_load_state(
+                    "networkidle",
+                    timeout=network_idle_timeout_ms,
+                )
             except Exception:
                 pass
+
+            await _apply_post_load_wait(page, wait_for)
+
+            if require_user_intervention:
+                await wait_for_intervention_end(page)
+
+            return await page.evaluate(_build_page_evaluate_script(script))
+        finally:
+            if page and not page.is_closed():
+                try:
+                    await page.close()
+                except Exception:
+                    pass
