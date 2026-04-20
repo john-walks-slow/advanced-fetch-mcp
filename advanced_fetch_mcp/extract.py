@@ -21,7 +21,7 @@ def _is_empty_html(html: str | None) -> bool:
 
 
 def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
-    extras: Set[str] = set(view.extra_elements)
+    extras: Set[str] = set(view.include_elements)
     return {
         "output_format": view.output_format,
         "include_comments": "comments" in extras,
@@ -45,25 +45,31 @@ def render_view(html: str, view: RenderConfig) -> str:
     attempts: list[Dict[str, Any]] = [primary_kwargs]
 
     if view.strategy == "strict":
-        attempts.append({
-            **primary_kwargs,
-            "favor_precision": False,
-            "favor_recall": False,
-        })
+        attempts.append(
+            {
+                **primary_kwargs,
+                "favor_precision": False,
+                "favor_recall": False,
+            }
+        )
 
     if view.strategy != "loose":
-        attempts.append({
+        attempts.append(
+            {
+                **primary_kwargs,
+                "favor_precision": False,
+                "favor_recall": True,
+            }
+        )
+
+    attempts.append(
+        {
             **primary_kwargs,
+            "fast": True,
             "favor_precision": False,
             "favor_recall": True,
-        })
-
-    attempts.append({
-        **primary_kwargs,
-        "fast": True,
-        "favor_precision": False,
-        "favor_recall": True,
-    })
+        }
+    )
 
     seen_attempts: set[tuple[tuple[str, Any], ...]] = set()
     for kwargs in attempts:
@@ -113,12 +119,8 @@ def render_auto_wait_text(html: str) -> str:
     return re.sub(r"\s+", " ", fallback_text).strip()
 
 
-def _window_start_for_match(match_start: int, max_length: int) -> int:
-    return max(0, match_start - max_length // 4)
-
-
 def _build_match_summary(
-    full_text: str, match: re.Match[str], max_length: int, text_offset: int = 0
+    full_text: str, match: re.Match[str], text_offset: int = 0
 ) -> MatchSummary:
     absolute_start = match.start() + text_offset
     snippet_radius = max(20, FIND_SNIPPET_MAX_CHARS // 2)
@@ -129,7 +131,7 @@ def _build_match_summary(
         snippet = "…" + snippet
     if snippet_end < len(full_text):
         snippet = snippet + "…"
-    cursor = encode_cursor(_window_start_for_match(absolute_start, max_length))
+    cursor = encode_cursor(absolute_start)
     return {
         "snippet": snippet,
         "cursor": cursor,
@@ -143,7 +145,6 @@ def encode_cursor(offset: int) -> int:
 def search_in_text(
     full_text: str,
     query: str,
-    max_length: int,
     use_regex: bool,
     text_offset: int = 0,
 ) -> Dict[str, Any]:
@@ -172,7 +173,9 @@ def search_in_text(
     matches_truncated = matches_total > MAX_FIND_MATCHES
     matches = [
         _build_match_summary(
-            full_text=full_text, match=match, max_length=max_length, text_offset=search_start
+            full_text=full_text,
+            match=match,
+            text_offset=search_start,
         )
         for match in found_matches[:MAX_FIND_MATCHES]
     ]
