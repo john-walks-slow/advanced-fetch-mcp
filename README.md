@@ -1,22 +1,17 @@
 # advanced-fetch-mcp
 
-为 Agent 提供快速、强大、节省 Token 的网页抓取能力。
-比 vanilla fetch 强大，比直接上 Playwright 简单。
+为 Agent 提供易用、强大、节约 Token 的网页抓取能力。
+比 vanilla fetch 强大，比 Playwright 简洁。
 
 ## 功能
 
-- **动态抓取优先**：默认使用 `dynamic` 模式，通过 Playwright 加载 JS 页面，适合现代网站。
-- **静态抓取兜底**：`static` 模式直接请求页面响应，适合静态页、简单详情页或接口返回页。
-- **智能提取**：统一使用 trafilatura 提取正文，尽量剔除导航、广告、脚注等噪音，节省 Token。
-- **自动等待**：`wait_for=auto` 时，会在页面加载后继续观察正文是否趋于稳定，再返回结果，适合懒加载页面。
-- **灵活策略**：`strategy` 选择提取模式——`strict` 偏正文纯度，`loose` 偏召回，`none` 使用 trafilatura 默认平衡策略。
-- **保留结构信息**：通过 `extra_elements` 控制是否额外保留 `tables`、`images`、`links`、`comments`、`formatting`。
-- **LLM 整理**：提供 `extract_prompt` 让模型对内容进行提炼，返回精简结果，避免原始页面内容污染调用方的上下文。
-- **搜索续读**：`find_in_page` 搜索关键词，返回命中列表。用 `cursor` 从任意位置续读，适合大页面分段处理。
-- **人工介入**：`require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。
-- **登录态持久化**：默认使用 `storage_state` 保存登录态。登录一次后，后续请求可继续复用。
-- **更像真实用户**：默认 `auth` 模式会设置 locale、viewport、Accept-Language、timezone，并尝试启用 stealth。
-- **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`，并且 `dynamic` / `static` 两种模式行为一致。
+- **正文提取**：基于 trafilatura 的强大正文提取能力，可配置的提取策略和范围，最大程度剔除噪音节省 Token。
+- **支持动态网站**：基于 Playwright 的动态网站抓取能力，智能识别页面稳定状态。
+- **LLM Sampling**：通过 `extract_prompt` 对网页内容进行提炼，返回精简结果，避免原始页面内容污染调用方上下文。
+- **大页面分段处理**：支持 `find_in_page` 在页面中搜索，`cursor` 和 `max_length` 从任意位置续读。
+- **人工介入和鉴权**：`require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
+- **反爬伪装**：包含 Playwright-Stealth，尽可能模仿真实请求，尽量防止被检测成机器人。
+- **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
 
 ## MCP Client 配置
 
@@ -74,7 +69,7 @@
 
 ## 示例
 
-抓正文（默认 `dynamic` + `strict` + `wait_for=auto`）：
+抓正文
 
 ```yaml
 url: https://example.com
@@ -87,13 +82,6 @@ url: https://example.com
 strategy: loose
 ```
 
-使用默认平衡策略：
-
-```yaml
-url: https://example.com
-strategy: none
-```
-
 保留链接和图片：
 
 ```yaml
@@ -104,11 +92,11 @@ extra_elements:
   - images
 ```
 
-动态模式下额外等待 2 秒：
+额外等待 5 秒：
 
 ```yaml
 url: https://example.com
-wait_for: 2
+wait_for: 5
 ```
 
 搜索关键词：
@@ -126,7 +114,7 @@ cursor: 300 # 假设这是某个命中的 cursor
 max_length: 300
 ```
 
-智能提炼（让模型整理）：
+智能 Sampling（让模型整理）：
 
 ```yaml
 url: https://example.com
@@ -153,8 +141,6 @@ url: https://private-site.com
 require_user_intervention: true
 ```
 
-会打开可见浏览器，用户登录后点击页面上的“我已完成操作”按钮，工具继续抓取。已登录的 session 会保存到 `storage_state.json`，后续请求可继续复用。
-
 ## 会话模式
 
 通过环境变量 `BROWSER_SESSION_MODE` 控制浏览器会话模式：
@@ -166,20 +152,7 @@ require_user_intervention: true
 
 ## 缓存
 
-最近抓取的网站会按 `url + mode` 缓存。
-
-当前行为是：
-
-- 普通抓取、`extract_prompt`、`evaluate_js` 会重新抓取页面，并更新缓存。
-- `find_in_page` 和 `cursor` 续读优先使用缓存，不重复抓取。
-
-因此更适合这样的使用方式：先抓一次页面，后续在同一页里搜索、跳转、续读时复用已有结果。
-
-## 环境变量加载
-
-程序启动时会优先读取显式指定的 dotenv 文件：`ADVANCED_FETCH_ENV_FILE`。如果未指定，则只读取当前工作目录下的 `.env`。
-
-这能兼容 `uv --directory <父目录>` 的用法：只要把 `.env` 放在那个工作目录里即可，不会误读其他项目的配置。
+最近抓取的网站会按 `url + mode` 缓存。后续在同一页里搜索、跳转、续读时复用已有结果。
 
 ## 环境变量
 
@@ -225,10 +198,7 @@ require_user_intervention: true
 
 ```bash
 uv sync
-uv run playwright install
 ```
-
-如果希望启用 stealth，请确认已安装 `playwright-stealth`。当前 `pyproject.toml` 已包含该依赖。
 
 ## 测试
 
