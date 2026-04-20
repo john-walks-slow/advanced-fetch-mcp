@@ -1,9 +1,41 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
+
+
+def _load_project_dotenv() -> Optional[Path]:
+    """
+    Load .env before importing any local modules that read environment variables.
+
+    Priority:
+    1. Current working directory (.env next to the directory passed via `uv --directory`)
+    2. dotenv's cwd-based discovery
+    3. Package-adjacent fallback
+    """
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.exists():
+        load_dotenv(cwd_env, override=False)
+        return cwd_env
+
+    discovered = find_dotenv(filename=".env", usecwd=True)
+    if discovered:
+        load_dotenv(discovered, override=False)
+        return Path(discovered)
+
+    package_env = Path(__file__).resolve().parent.parent / ".env"
+    if package_env.exists():
+        load_dotenv(package_env, override=False)
+        return package_env
+
+    return None
+
+
+_LOADED_DOTENV_PATH = _load_project_dotenv()
+
 from fastmcp import Context, FastMCP
 
 from .browser import browser_manager
@@ -25,10 +57,13 @@ from .params import (
     UrlParam,
     WaitForParam,
 )
-from .settings import ENV_FILE
+from .settings import logger
 from .workflow import execute_advanced_fetch
 
-load_dotenv(ENV_FILE)
+if _LOADED_DOTENV_PATH is not None:
+    logger.info("[Config] 已加载 .env: %s", _LOADED_DOTENV_PATH)
+else:
+    logger.info("[Config] 未找到 .env，继续使用系统环境变量")
 
 mcp = FastMCP("AdvancedFetchMCP")
 
