@@ -11,7 +11,7 @@ async def run_prompt_extraction(*, ctx: Any, source_text: str, prompt: str) -> D
         raise RuntimeError("prompt 功能需要可用的 MCP 上下文。")
 
     response = await ctx.sample(
-        prompt=f"{prompt}\n\n以下是网页文本：\n{text}",
+        f"{prompt}\n\n以下是网页文本：\n{text}",
     )
     if hasattr(response, "text"):
         return {"value": response.text}
