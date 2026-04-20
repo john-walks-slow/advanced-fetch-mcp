@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+import json
+from typing import Any, Dict, Tuple
 
 from .extract import continue_in_text, render_view, search_in_text
 from .fetch import (
@@ -18,6 +19,38 @@ FIND_MATCHES_WARNING = f"命中数量过多，仅返回前 {MAX_FIND_MATCHES} �
 CACHE_HIT_WARNING = (
     "本次结果使用了缓存。若需刷新缓存，请发起一次不带 render.cursor 的非 find 请求。"
 )
+
+
+def _serialize_result_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list, bool, int, float)):
+        try:
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        except Exception:
+            return str(value)
+    return str(value)
+
+
+def _truncate_text_middle(value: str, max_length: int) -> Tuple[str, bool]:
+    if len(value) <= max_length:
+        return value, False
+    omitted = len(value) - max_length
+    long_marker = f"<{omitted} chars truncated...>"
+    short_marker = f"<{omitted}>"
+    marker = long_marker if max_length >= len(long_marker) + 2 else short_marker
+    if max_length <= len(marker):
+        return marker[:max_length], True
+    remaining = max_length - len(marker)
+    head = max(1, remaining // 2)
+    tail = max(1, remaining - head)
+    if head + tail > len(value):
+        tail = max(0, len(value) - head)
+    return (
+        value[:head] + marker + value[-tail:] if tail else value[:head] + marker
+    ), True
 
 
 def _build_warnings(fetch_result: FetchResult) -> list[str]:
@@ -113,10 +146,15 @@ async def execute_advanced_fetch(
             script=request.eval.script if request.eval else "",
             timeout=request.fetch.timeout,
         )
+        result_text, truncated = _truncate_text_middle(
+            _serialize_result_value(value),
+            request.render.max_length,
+        )
         return _build_public_result(
             fetch_result=fetch_result,
-            result_payload=value,
+            result_payload=result_text,
             warnings=warnings,
+            truncated=truncated,
             cache_hit=cache_hit,
         )
 
@@ -171,10 +209,15 @@ async def execute_advanced_fetch(
             logger.warning("[Sampling] 失败，回退到原始视图文本：%s", exc)
             warnings.append(f"sampling 处理失败，已回退到原始文本：{exc}")
             result_text = rendered
+        result_text, truncated = _truncate_text_middle(
+            result_text,
+            request.render.max_length,
+        )
         return _build_public_result(
             fetch_result=fetch_result,
             result_payload=result_text,
             warnings=warnings,
+            truncated=truncated,
             cache_hit=cache_hit,
         )
 
