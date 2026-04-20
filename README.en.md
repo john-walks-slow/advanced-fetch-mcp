@@ -7,9 +7,9 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 
 - **Main-content extraction**: Built on top of trafilatura with configurable extraction strategy and scope, removing as much noise as possible to save tokens.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
-- **LLM Sampling**: Use `extract_prompt` to refine page content and return a condensed result, avoiding raw page content polluting the caller context.
-- **Chunked reading for large pages**: Supports `find_in_page` for searching within a page, and `cursor` + `max_length` to continue reading from any position.
-- **Manual intervention and auth**: `require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
+- **LLM Sampling**: Use `sampling.prompt` to refine page content and return a condensed result, avoiding raw page content polluting the caller context.
+- **Chunked reading for large pages**: Supports `find.query` for searching within a page, and `render.cursor` + `render.max_length` to continue reading from any position.
+- **Manual intervention and auth**: `fetch.require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
 
@@ -111,7 +111,7 @@ Notes:
 | :--- | :--- |
 | Operation-specific config | The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive. |
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
-| `render.max_length` scope | max length only applies to text produced by the render step. It does not apply to results of other operations. |
+| `render.max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, truncating the final returned content. |
 | `render.cursor` scope | Only valid for `view` and `find`. Used to continue reading or searching from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
 
