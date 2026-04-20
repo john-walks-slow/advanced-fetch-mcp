@@ -115,6 +115,122 @@ Notes:
 | `render.cursor` scope | Only valid for `view` and `find`. Used to continue reading or searching from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
 
+## Response format
+
+### Common response shape
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "...",
+  "cache_hit": true,
+  "timed_out": true,
+  "timeout_stage": "network_idle",
+  "intervention_ended_by": "timeout",
+  "truncated": true,
+  "next_cursor": 8000,
+  "warnings": ["..."]
+}
+```
+
+### Common fields
+
+| Field | Type | Always present | Description |
+| :--- | :--- | :--- | :--- |
+| `success` | `boolean` | Yes | Always `true` on success. |
+| `final_url` | `string` | Yes | Final page URL, which may differ from the input `url`. |
+| `result` | `string` | Yes | Primary return payload. For `view`/`sampling`/`eval`, this is the text result; for `find`, it is currently always an empty string. |
+| `cache_hit` | `boolean` | No | Present when a cached fetch result was reused. |
+| `timed_out` | `boolean` | No | Present when a timeout occurred during fetching. |
+| `timeout_stage` | `string` | No | Stage where the timeout occurred. |
+| `intervention_ended_by` | `string` | No | Why manual intervention ended, for example `timeout` or `page_closed`. |
+| `truncated` | `boolean` | No | Present when the returned content was truncated by `render.max_length`. |
+| `next_cursor` | `integer` | No | Returned when more content can be read or searched from a later offset. |
+| `warnings` | `string[]` | No | Warning messages. |
+
+### `view` response
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "A window of the extracted page text",
+  "truncated": true,
+  "next_cursor": 8000
+}
+```
+
+Notes:
+- `result` contains the current text window.
+- When there is more text to read, `next_cursor` is returned.
+
+### `find` response
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "",
+  "found": true,
+  "matches": [
+    {
+      "snippet": "...text around the match...",
+      "cursor": 1234
+    }
+  ],
+  "matches_total": 3,
+  "matches_truncated": false,
+  "next_cursor": 1234
+}
+```
+
+### `find`-specific fields
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `found` | `boolean` | Whether any match was found. |
+| `matches` | `object[]` | List of match summaries. |
+| `matches_total` | `integer` | Total number of matches found. |
+| `matches_truncated` | `boolean` | Whether the returned match summaries were truncated because there were too many matches. |
+
+### `find.matches` item shape
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `snippet` | `string` | Text snippet around the match. |
+| `cursor` | `integer` | Offset that can be used later as `render.cursor` to continue reading. |
+
+### `sampling` response
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "Refined extraction result",
+  "truncated": true
+}
+```
+
+Notes:
+- `result` is the LLM-refined text result.
+- If sampling fails, it falls back to the raw rendered text and explains that in `warnings`.
+
+### `eval` response
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "{\n  \"title\": \"Example\"\n}",
+  "truncated": false
+}
+```
+
+Notes:
+- `result` is the stringified script execution result.
+- If the script returns an object, array, boolean, or number, it is serialized to a JSON string before being returned.
+
 ## Examples
 
 Fetch the main content:
