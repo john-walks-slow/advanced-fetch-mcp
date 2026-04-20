@@ -121,6 +121,124 @@
 | `render.cursor` 作用域 | 仅对 `view`、`find` 有效。用于从上次返回的 `next_cursor` 位置继续读取或搜索。 |
 | 续读一致性 | 使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。 |
 
+---
+
+## 返回值格式
+
+### 通用返回结构
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "...",
+  "cache_hit": true,
+  "timed_out": true,
+  "timeout_stage": "network_idle",
+  "intervention_ended_by": "timeout",
+  "truncated": true,
+  "next_cursor": 8000,
+  "warnings": ["..."]
+}
+```
+
+### 通用字段说明
+
+| 字段 | 类型 | 必然出现 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `success` | `boolean` | 是 | 成功时恒为 `true`。 |
+| `final_url` | `string` | 是 | 最终页面 URL，可能与输入 `url` 不同。 |
+| `result` | `string` | 是 | 主返回内容。`view`/`sampling`/`eval` 为文本结果；`find` 当前固定为空字符串。 |
+| `cache_hit` | `boolean` | 否 | 命中缓存时出现。 |
+| `timed_out` | `boolean` | 否 | 抓取阶段发生超时时出现。 |
+| `timeout_stage` | `string` | 否 | 超时所在阶段。 |
+| `intervention_ended_by` | `string` | 否 | 人工介入结束原因，如 `timeout`、`page_closed`。 |
+| `truncated` | `boolean` | 否 | 返回结果被 `render.max_length` 截断时出现。 |
+| `next_cursor` | `integer` | 否 | 可继续读取或继续搜索时返回下一段偏移量。 |
+| `warnings` | `string[]` | 否 | 警告信息列表。 |
+
+### `view` 返回
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "页面正文片段",
+  "truncated": true,
+  "next_cursor": 8000
+}
+```
+
+说明：
+- `result` 为当前窗口的正文文本。
+- 当正文未读完时，会返回 `next_cursor`。
+
+### `find` 返回
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "",
+  "found": true,
+  "matches": [
+    {
+      "snippet": "…命中附近的文本片段…",
+      "cursor": 1234
+    }
+  ],
+  "matches_total": 3,
+  "matches_truncated": false,
+  "next_cursor": 1234
+}
+```
+
+### `find` 特有字段
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `found` | `boolean` | 是否找到命中。 |
+| `matches` | `object[]` | 命中摘要列表。 |
+| `matches_total` | `integer` | 总命中数。 |
+| `matches_truncated` | `boolean` | 命中摘要是否因数量过多而被截断。 |
+
+### `find.matches` 项结构
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `snippet` | `string` | 命中附近的文本摘要。 |
+| `cursor` | `integer` | 可用于后续 `render.cursor` 续读的偏移量。 |
+
+### `sampling` 返回
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "提炼后的结果文本",
+  "truncated": true
+}
+```
+
+说明：
+- `result` 为 LLM 提炼后的文本结果。
+- 若 `sampling` 失败，会回退到原始正文文本，并在 `warnings` 中说明。
+
+### `eval` 返回
+
+```json
+{
+  "success": true,
+  "final_url": "https://example.com/final",
+  "result": "{\n  \"title\": \"Example\"\n}",
+  "truncated": false
+}
+```
+
+说明：
+- `result` 为脚本执行结果的字符串化内容。
+- 若返回值是对象、数组、布尔值或数字，会先序列化为 JSON 字符串再返回。
+
 ## 示例
 
 抓正文：
