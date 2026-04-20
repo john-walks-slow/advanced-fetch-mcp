@@ -7,9 +7,9 @@
 
 - **正文提取**：基于 trafilatura 的强大正文提取能力，可配置的提取策略和范围，最大程度剔除噪音节省 Token。
 - **支持动态网站**：基于 Playwright 的动态网站抓取能力，智能识别页面稳定状态。
-- **LLM Sampling**：通过 `extract_prompt` 对网页内容进行提炼，返回精简结果，避免原始页面内容污染调用方上下文。
-- **大页面分段处理**：支持 `find_in_page` 在页面中搜索，`cursor` 和 `max_length` 从任意位置续读。
-- **人工介入和鉴权**：`require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
+- **LLM Sampling**：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果，避免原始页面内容污染调用方上下文。
+- **大页面分段处理**：支持 `find.query` 在页面中搜索，`render.cursor` 和 `render.max_length` 从任意位置续读。
+- **人工介入和鉴权**：`fetch.require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
 - **反爬伪装**：包含 Playwright-Stealth，尽可能模仿真实请求，尽量防止被检测成机器人。
 - **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
 
@@ -117,7 +117,7 @@
 | :--- | :--- |
 | 操作专属配置 | 仅当 `operation` 为对应值时，才可提供 `find`、`sampling` 或 `eval` 对象，且三者互斥。 |
 | `eval` 模式限制 | `operation="eval"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
-| `render.max_length` 作用域 | max length 只对 render 过程产生出的文本长度生效。对其他操作结果不生效。 |
+| `render.max_length` 作用域 | 对 `view`、`find`、`sampling`、`eval` 均生效，截断最终返回内容。 |
 | `render.cursor` 作用域 | 仅对 `view`、`find` 有效。用于从上次返回的 `next_cursor` 位置继续读取或搜索。 |
 | 续读一致性 | 使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。 |
 
