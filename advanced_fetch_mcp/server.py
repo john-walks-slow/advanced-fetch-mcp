@@ -8,20 +8,13 @@ from fastmcp import Context, FastMCP
 from .browser import browser_manager
 from .params import (
     AdvancedFetchParams,
-    CursorParam,
-    EvaluateJsParam,
-    ExtractPromptParam,
-    ExtraElementsParam,
-    FindInPageParam,
-    FindWithRegexParam,
-    MaxLengthParam,
-    ModeParam,
-    OutputFormatParam,
-    RequireInterventionParam,
-    StrategyParam,
-    TimeoutParam,
+    EvalParam,
+    FetchParam,
+    FindParam,
+    OperationParam,
+    RenderParam,
+    SamplingParam,
     UrlParam,
-    WaitForParam,
     schema_text,
 )
 from .workflow import execute_advanced_fetch
@@ -34,19 +27,12 @@ mcp = FastMCP("AdvancedFetchMCP")
 async def advanced_fetch(
     ctx: Context,
     url: UrlParam,
-    mode: ModeParam,
-    wait_for: WaitForParam,
-    timeout: TimeoutParam,
-    output_format: OutputFormatParam,
-    strategy: StrategyParam,
-    extra_elements: ExtraElementsParam,
-    cursor: CursorParam,
-    max_length: MaxLengthParam,
-    find_in_page: FindInPageParam,
-    find_with_regex: FindWithRegexParam,
-    extract_prompt: ExtractPromptParam,
-    evaluate_js: EvaluateJsParam,
-    require_user_intervention: RequireInterventionParam,
+    operation: OperationParam,
+    fetch: FetchParam,
+    render: RenderParam,
+    find: FindParam,
+    sampling: SamplingParam,
+    eval: EvalParam,
 ) -> Dict[str, Any]:
     params_dict = {
         k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields
