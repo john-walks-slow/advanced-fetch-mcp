@@ -21,6 +21,9 @@ from .sampling import run_prompt_extraction
 from .settings import DEFAULT_MAX_LENGTH, MAX_FIND_MATCHES, logger
 
 FIND_MATCHES_WARNING = f"命中数量过多，仅返回前 {MAX_FIND_MATCHES} 个 matches 摘要。"
+CACHE_HIT_WARNING = (
+    "本次结果使用了缓存。若需刷新缓存，请发起一次不带 cursor 和 find_in_page 的请求。"
+)
 
 
 def _serialize_result_value(value: Any) -> str:
@@ -76,6 +79,7 @@ def _build_public_result(
     result_payload: Any,
     warnings: list[str],
     truncated: bool,
+    cache_hit: bool = False,
     next_cursor: int | None = None,
     find_result: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
@@ -84,6 +88,8 @@ def _build_public_result(
         "final_url": fetch_result.final_url,
         "result": result_payload,
     }
+    if cache_hit:
+        result["cache_hit"] = True
     if fetch_result.timed_out:
         result["timed_out"] = True
         if fetch_result.timeout_stage:
@@ -117,9 +123,9 @@ async def execute_advanced_fetch(
     url = request.url
     effective_max_length = request.max_length or DEFAULT_MAX_LENGTH
 
-    # require_user_intervention 或 evaluate_js 强制刷新缓存
     skip_cache = request.should_skip_cache
     cached = get_cached_fetch(url, request.mode) if not skip_cache else None
+    cache_hit = cached is not None
 
     if cached is not None:
         final_url, html = cached
@@ -134,12 +140,12 @@ async def execute_advanced_fetch(
             request.timeout,
         )
         # 只有非 intervention、非 evaluate_js 时才写缓存
-        if not request.require_user_intervention and request.evaluate_js is None:
-            store_cached_fetch(
-                url, request.mode, fetch_result.final_url, fetch_result.html
-            )
+        # if not request.require_user_intervention and request.evaluate_js is None:
+        store_cached_fetch(url, request.mode, fetch_result.final_url, fetch_result.html)
 
     warnings = _build_warnings(fetch_result)
+    if cache_hit:
+        warnings.append(CACHE_HIT_WARNING)
 
     if request.operation == "eval":
         value = await evaluate_script_on_page(
@@ -158,6 +164,7 @@ async def execute_advanced_fetch(
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
+            cache_hit=cache_hit,
         )
 
     rendered = render_view(fetch_result.html, request.to_render_config())
@@ -179,6 +186,7 @@ async def execute_advanced_fetch(
             result_payload=find_result["text"],
             warnings=warnings,
             truncated=False,
+            cache_hit=cache_hit,
             next_cursor=find_result.get("next_cursor"),
             find_result=find_result,
         )
@@ -195,6 +203,7 @@ async def execute_advanced_fetch(
             result_payload=continue_result["text"],
             warnings=warnings,
             truncated=False,
+            cache_hit=cache_hit,
             next_cursor=continue_result.get("next_cursor"),
         )
 
@@ -223,6 +232,7 @@ async def execute_advanced_fetch(
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
+            cache_hit=cache_hit,
             next_cursor=next_cursor,
         )
 
@@ -236,5 +246,6 @@ async def execute_advanced_fetch(
         result_payload=result_text,
         warnings=warnings,
         truncated=truncated,
+        cache_hit=cache_hit,
         next_cursor=next_cursor,
     )
