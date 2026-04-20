@@ -45,8 +45,11 @@ def _channel_name() -> Optional[str]:
     return channel or None
 
 
-def _accept_language_header() -> str:
-    locale = (BROWSER_LOCALE or "en-US").replace("_", "-")
+def _accept_language_header() -> Optional[str]:
+    if not BROWSER_LOCALE:
+        return None
+
+    locale = BROWSER_LOCALE.replace("_", "-")
     base = locale.split("-", 1)[0]
     ordered = [locale]
     if base and base not in ordered:
@@ -68,7 +71,6 @@ def _accept_language_header() -> str:
 
 def _base_context_kwargs() -> dict:
     kwargs = {
-        "locale": BROWSER_LOCALE,
         "color_scheme": BROWSER_COLOR_SCHEME,
         "viewport": {
             "width": BROWSER_VIEWPORT_WIDTH,
@@ -76,14 +78,19 @@ def _base_context_kwargs() -> dict:
         },
         "device_scale_factor": 1,
         "ignore_https_errors": IGNORE_SSL_ERRORS,
-        "extra_http_headers": {
-            "Accept-Language": _accept_language_header(),
-        },
     }
     if USER_AGENT:
         kwargs["user_agent"] = USER_AGENT
+    if BROWSER_LOCALE:
+        kwargs["locale"] = BROWSER_LOCALE
     if BROWSER_TIMEZONE_ID:
         kwargs["timezone_id"] = BROWSER_TIMEZONE_ID
+
+    accept_language = _accept_language_header()
+    if accept_language:
+        kwargs["extra_http_headers"] = {
+            "Accept-Language": accept_language,
+        }
     return kwargs
 
 
