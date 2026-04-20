@@ -12,6 +12,14 @@ from .settings import FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES
 MatchSummary = Dict[str, str]
 
 
+def _normalize_html_input(html: str | None) -> str:
+    return "" if html is None else html
+
+
+def _is_empty_html(html: str | None) -> bool:
+    return not _normalize_html_input(html).strip()
+
+
 def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
     extras: Set[str] = set(view.extra_elements)
     return {
@@ -28,6 +36,10 @@ def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
 
 
 def render_view(html: str, view: RenderConfig) -> str:
+    html = _normalize_html_input(html)
+    if _is_empty_html(html):
+        return ""
+
     primary_kwargs = _build_trafilatura_kwargs(view)
 
     attempts: list[Dict[str, Any]] = [primary_kwargs]
@@ -78,6 +90,10 @@ def render_view(html: str, view: RenderConfig) -> str:
 
 def render_auto_wait_text(html: str) -> str:
     """用于 wait_for=auto：只关心可抽取正文文本是否趋于稳定。"""
+    html = _normalize_html_input(html)
+    if _is_empty_html(html):
+        return ""
+
     extracted = trafilatura.extract(
         html,
         output_format="txt",
