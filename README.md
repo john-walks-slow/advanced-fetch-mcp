@@ -47,12 +47,6 @@
 }
 ```
 
-说明：
-
-- `BROWSER_LOCALE` 留空时，使用系统默认 locale。
-- `BROWSER_TIMEZONE_ID` 留空时，使用系统默认时区。
-- `SCHEMA_LANGUAGE` 控制 MCP schema 描述语言，支持 `zh` / `en`。
-
 ## 参数
 
 | 参数                        | 说明                                                                                              |
