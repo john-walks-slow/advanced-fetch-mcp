@@ -53,9 +53,8 @@ class RunPromptExtractionTests(unittest.IsolatedAsyncioTestCase):
             prompt="提取",
         )
 
-        # 验证 sample 接收的文本不超过限制
-        call_args = ctx.sample.await_args.kwargs["prompt"]
-        text_part = call_args.split("\n\n以下是网页文本：\n")[1]
+        call_prompt = ctx.sample.await_args.args[0]
+        text_part = call_prompt.split("\n\n以下是网页文本：\n", 1)[1]
         self.assertEqual(len(text_part), PROMPT_INPUT_MAX_CHARS)
 
     async def test_raises_error_when_ctx_is_none(self):
@@ -82,7 +81,7 @@ class RunPromptExtractionTests(unittest.IsolatedAsyncioTestCase):
             prompt="请提取标题",
         )
 
-        call_prompt = ctx.sample.await_args.kwargs["prompt"]
+        call_prompt = ctx.sample.await_args.args[0]
         self.assertIn("请提取标题", call_prompt)
         self.assertIn("以下是网页文本：", call_prompt)
         self.assertIn("网页内容", call_prompt)

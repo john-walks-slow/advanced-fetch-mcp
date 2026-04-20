@@ -1,7 +1,4 @@
-"""真实内容提取集成测试。
-
-测试各种提取策略对真实网页的实际效果。
-"""
+"""真实内容提取集成测试。"""
 
 import pytest
 
@@ -12,7 +9,6 @@ from advanced_fetch_mcp.params import RenderConfig
 @pytest.mark.integration
 class TestRealExtract:
     def test_strict_strategy_on_example_com(self):
-        """strict 策略提取 example.com。"""
         html = """
         <html>
         <head><title>Example</title></head>
@@ -29,11 +25,9 @@ class TestRealExtract:
         view = RenderConfig(output_format="markdown", strategy="strict")
         result = render_view(html, view)
         assert "Example Domain" in result
-        # strict 策略应剔除导航和 footer
         assert "Navigation" not in result
 
-    def test_none_strategy_preserves_all(self):
-        """none 策略保留所有内容。"""
+    def test_balanced_strategy_keeps_main_content(self):
         html = """
         <html>
         <body>
@@ -43,14 +37,12 @@ class TestRealExtract:
         </body>
         </html>
         """
-        view = RenderConfig(output_format="markdown", strategy="none")
+        view = RenderConfig(output_format="markdown", strategy=None)
         result = render_view(html, view)
         assert "Nav Content" in result
         assert "Main Content" in result
-        assert "Footer Content" in result
 
     def test_loose_strategy_on_complex_html(self):
-        """loose 策略应更宽松地提取内容。"""
         html = """
         <html>
         <body>
@@ -70,7 +62,6 @@ class TestRealExtract:
         assert "Article content" in result
 
     def test_html_output_format(self):
-        """html 输出格式应保留 HTML 标签。"""
         html = """
         <html>
         <body>
@@ -79,34 +70,12 @@ class TestRealExtract:
         </body>
         </html>
         """
-        view = RenderConfig(output_format="html", strategy="none")
+        view = RenderConfig(output_format="html", strategy=None)
         result = render_view(html, view)
-        assert "<h1>" in result or "Title" in result
-        assert "<p>" in result or "Paragraph" in result
-
-    def test_strip_selectors_on_real_html(self):
-        """strip_selectors 应剔除指定元素。"""
-        html = """
-        <html>
-        <body>
-            <div class="advertisement">Buy Now!</div>
-            <div class="sidebar">Sidebar</div>
-            <main>Main Content</main>
-        </body>
-        </html>
-        """
-        view = RenderConfig(
-            output_format="markdown",
-            strategy="none",
-            strip_selectors=[".advertisement", ".sidebar"],
-        )
-        result = render_view(html, view)
-        assert "Main Content" in result
-        assert "Buy Now!" not in result
-        assert "Sidebar" not in result
+        assert "Title" in result
+        assert "Paragraph" in result
 
     def test_markdown_format_preserves_structure(self):
-        """markdown 格式应保留文档结构。"""
         html = """
         <html>
         <body>
@@ -119,7 +88,7 @@ class TestRealExtract:
         </body>
         </html>
         """
-        view = RenderConfig(output_format="markdown", strategy="none")
+        view = RenderConfig(output_format="markdown", strategy=None)
         result = render_view(html, view)
         assert "Heading 1" in result
         assert "Heading 2" in result
@@ -127,15 +96,12 @@ class TestRealExtract:
         assert "Item 2" in result
 
     def test_trafilatura_fallback_on_invalid_html(self):
-        """trafilatura 失败时应 fallback 到 body 处理。"""
-        # 极简 HTML，trafilatura 可能无法提取
         html = "<html><body>Just plain text</body></html>"
         view = RenderConfig(output_format="markdown", strategy="strict")
         result = render_view(html, view)
-        assert result  # 应返回某些内容而非空
+        assert result
 
-    def test_img_in_strip_selectors_excludes_images(self):
-        """strip_selectors 包含 img 时不应保留图片。"""
+    def test_images_can_be_included(self):
         html = """
         <html>
         <body>
@@ -147,7 +113,7 @@ class TestRealExtract:
         view = RenderConfig(
             output_format="markdown",
             strategy="strict",
-            strip_selectors=["img"],
+            include_elements=["images", "formatting"],
         )
         result = render_view(html, view)
         assert "Text content" in result

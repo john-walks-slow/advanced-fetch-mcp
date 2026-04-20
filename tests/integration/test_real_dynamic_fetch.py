@@ -10,7 +10,7 @@ from advanced_fetch_mcp.fetch import dynamic_fetch, fetch_url, evaluate_script_o
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestRealDynamicFetch:
     async def test_fetch_simple_page(self):
         """抓取简单页面应成功。"""
@@ -86,7 +86,7 @@ class TestRealDynamicFetch:
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.anyio
 class TestRealEvaluateJs:
     async def test_evaluate_returns_document_title(self):
         """执行 JS 返回 document.title。"""

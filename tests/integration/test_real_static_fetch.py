@@ -4,6 +4,7 @@
 """
 
 import pytest
+import requests
 
 from advanced_fetch_mcp.fetch import static_fetch
 
@@ -22,7 +23,7 @@ class TestRealStaticFetch:
         """抓取 httpbin HTML 页面应成功。"""
         result = static_fetch("https://httpbin.org/html", timeout=15)
         assert result.html
-        assert "Marn特效" in result.html or "httpbin" in result.html.lower()
+        assert "Herman Melville" in result.html or "Moby-Dick" in result.html
         assert not result.timed_out
 
     def test_fetch_handles_redirect(self):
@@ -41,10 +42,8 @@ class TestRealStaticFetch:
 
     def test_http_error_raises_for_status(self):
         """HTTP 错误状态码应抛异常（被 requests 处理）。"""
-        # 404 页面
-        result = static_fetch("https://httpbin.org/status/404", timeout=10)
-        # static_fetch 捕获 requests 异常返回空结果
-        assert result.html == "" or result.timed_out
+        with pytest.raises(requests.HTTPError):
+            static_fetch("https://httpbin.org/status/404", timeout=10)
 
     def test_final_url_matches_response_url(self):
         """final_url 应反映重定向后的实际 URL。"""

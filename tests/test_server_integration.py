@@ -14,6 +14,7 @@ class _DummyFastMCP:
     def tool(self):
         def decorator(fn):
             return fn
+
         return decorator
 
 
@@ -37,47 +38,51 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         else:
             sys.modules["fastmcp"] = previous_fastmcp
 
-    async def test_request_is_passed_directly(self):
+    async def test_request_is_validated_from_current_nested_params(self):
         server = self._import_server()
-        # 构建完整参数，验证传递正确性
         params = AdvancedFetchParams(
             url="https://example.com",
-            mode="dynamic",
-            output_format="html",
-            strategy="none",
-            strip_selectors=[".ad"],
+            operation="view",
+            fetch={"mode": "static", "timeout": 1.5},
+            render={
+                "output_format": "html",
+                "strategy": "loose",
+                "include_elements": ["links"],
+            },
             max_length=123,
-            refresh_cache=True,
         )
-        with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(
-                ctx=object(),
-                **params.model_dump(),
-            )
+        with patch(
+            "advanced_fetch_mcp.server.execute_advanced_fetch",
+            new=AsyncMock(return_value={"success": True}),
+        ) as exec_mock:
+            result = await server.advanced_fetch(ctx=object(), **params.model_dump())
+
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]
         self.assertEqual(passed_request.url, "https://example.com")
-        self.assertEqual(passed_request.mode, "dynamic")
-        self.assertEqual(passed_request.output_format, "html")
-        self.assertEqual(passed_request.strategy, "none")
-        self.assertEqual(passed_request.strip_selectors, [".ad"])
+        self.assertEqual(passed_request.fetch.mode, "static")
+        self.assertEqual(passed_request.fetch.timeout, 1.5)
+        self.assertEqual(passed_request.render.output_format, "html")
+        self.assertEqual(passed_request.render.strategy, "loose")
+        self.assertEqual(passed_request.render.include_elements, ["links"])
         self.assertEqual(passed_request.max_length, 123)
-        self.assertTrue(passed_request.refresh_cache)
 
-    async def test_evaluate_js_request_is_valid(self):
+    async def test_eval_request_is_valid(self):
         server = self._import_server()
-        # 构建参数，验证 evaluate_js 互斥约束
         params = AdvancedFetchParams(
             url="https://example.com",
-            evaluate_js="return document.title;",
+            operation="eval",
+            eval={"script": "return document.title;"},
         )
-        with patch("advanced_fetch_mcp.server.execute_advanced_fetch", new=AsyncMock(return_value={"success": True})) as exec_mock:
-            result = await server.advanced_fetch(
-                ctx=object(),
-                **params.model_dump(),
-            )
+        with patch(
+            "advanced_fetch_mcp.server.execute_advanced_fetch",
+            new=AsyncMock(return_value={"success": True}),
+        ) as exec_mock:
+            result = await server.advanced_fetch(ctx=object(), **params.model_dump())
+
         self.assertEqual(result, {"success": True})
         passed_request = exec_mock.await_args.kwargs["request"]
-        self.assertEqual(passed_request.evaluate_js, "return document.title;")
-        self.assertIsNone(passed_request.extract_prompt)
-        self.assertIsNone(passed_request.find_in_page)
+        self.assertEqual(passed_request.operation, "eval")
+        self.assertEqual(passed_request.eval.script, "return document.title;")
+        self.assertIsNone(passed_request.sampling)
+        self.assertIsNone(passed_request.find)

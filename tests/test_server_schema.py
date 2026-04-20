@@ -16,14 +16,15 @@ class ServerSchemaTests(unittest.TestCase):
         server = self._import_real_server()
         self.assertTrue(hasattr(server, "mcp"))
 
-    def test_public_signature_keeps_single_tool_without_action(self):
+    def test_public_signature_matches_current_request_model(self):
         server = self._import_real_server()
         signature = inspect.signature(server.advanced_fetch)
         params = list(signature.parameters.keys())
+        self.assertEqual(
+            params,
+            ["url", "operation", "fetch", "render", "max_length", "find", "sampling", "eval", "ctx"],
+        )
         self.assertNotIn("action", params)
-        self.assertIn("output_format", params)
-        self.assertIn("extract_prompt", params)
-        self.assertIn("evaluate_js", params)
-        self.assertNotIn("prompt", params)
-        self.assertNotIn("evaluateJS", params)
-
+        self.assertNotIn("output_format", params)
+        self.assertNotIn("extract_prompt", params)
+        self.assertNotIn("evaluate_js", params)
