@@ -48,16 +48,17 @@ async def advanced_fetch(
     evaluate_js: EvaluateJsParam,
     require_user_intervention: RequireInterventionParam,
 ) -> Dict[str, Any]:
-    """快速、强大、节省 Token 的网页抓取工具。"""
-    advanced_fetch.__doc__ = schema_text(
-        "快速、强大、节省 Token 的网页抓取工具。",
-        "Fast, powerful, token-efficient web fetching tool.",
-    )
     params_dict = {
         k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields
     }
     request = AdvancedFetchParams.model_validate(params_dict)
     return await execute_advanced_fetch(ctx=ctx, request=request)
+
+
+advanced_fetch.__doc__ = schema_text(
+    "快速、强大、节省 Token 的网页抓取工具。",
+    "Fast, powerful, token-efficient web fetching tool.",
+)
 
 
 def cleanup():
