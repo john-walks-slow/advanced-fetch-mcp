@@ -22,6 +22,7 @@ from .params import (
     TimeoutParam,
     UrlParam,
     WaitForParam,
+    schema_text,
 )
 from .workflow import execute_advanced_fetch
 
@@ -47,7 +48,11 @@ async def advanced_fetch(
     evaluate_js: EvaluateJsParam,
     require_user_intervention: RequireInterventionParam,
 ) -> Dict[str, Any]:
-    """快速、强大、节省 Token 的动态网页抓取工具。"""
+    """快速、强大、节省 Token 的网页抓取工具。"""
+    advanced_fetch.__doc__ = schema_text(
+        "快速、强大、节省 Token 的网页抓取工具。",
+        "Fast, powerful, token-efficient web fetching tool.",
+    )
     params_dict = {
         k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields
     }
