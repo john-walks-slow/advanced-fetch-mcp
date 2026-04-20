@@ -1,84 +1,100 @@
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Set
 
-from bs4 import BeautifulSoup, Tag
-from markdownify import markdownify
 import trafilatura
+from lxml import html as lxml_html
 
 from .params import RenderConfig
-from .settings import CORE_REMOVE_TAGS, FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES
+from .settings import FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES
 
 MatchSummary = Dict[str, str]
 
 
-def apply_strip_selectors(root: Tag, strip_selectors: list[str]) -> Tag:
-    """按 CSS selectors 剔除节点。"""
-    for selector in strip_selectors:
-        try:
-            for tag in root.select(selector):
-                tag.decompose()
-        except Exception:
-            continue
-    return root
-
-
-def prepare_body(soup: BeautifulSoup, view: RenderConfig) -> Tag:
-    """用于 strategy=none，返回处理后的 body。"""
-    root: Tag = soup.body or soup
-
-    # 移除 script/style 等基础噪音
-    for tag_name in CORE_REMOVE_TAGS:
-        for tag in root.find_all(tag_name):
-            tag.decompose()
-
-    # 按 strip_selectors 剔除节点
-    apply_strip_selectors(root, view.strip_selectors)
-
-    return root
+def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
+    extras: Set[str] = set(view.extra_elements)
+    return {
+        "output_format": view.output_format,
+        "include_comments": "comments" in extras,
+        "include_tables": "tables" in extras,
+        "include_images": "images" in extras,
+        "include_links": "links" in extras,
+        "include_formatting": view.output_format == "markdown" or "formatting" in extras,
+        "favor_precision": view.strategy == "strict",
+        "favor_recall": view.strategy == "loose",
+        "deduplicate": True,
+    }
 
 
 def render_view(html: str, view: RenderConfig) -> str:
-    strategy = view.strategy
-    want_markdown = view.output_format == "markdown"
-    strip_selectors = view.strip_selectors
+    primary_kwargs = _build_trafilatura_kwargs(view)
 
-    # strategy=none 时返回完整 body（不智能提取）
-    if strategy == "none":
-        soup = BeautifulSoup(html, "html.parser")
-        prepared_root = prepare_body(soup, view)
-        if want_markdown:
-            return markdownify(str(prepared_root))
-        return str(prepared_root)
+    attempts: list[Dict[str, Any]] = [primary_kwargs]
 
-    # strategy=strict/loose 用 trafilatura 智能提取
-    output_format = "markdown" if want_markdown else "txt"
-    favor_precision = strategy == "strict"
-    favor_recall = strategy == "loose"
+    if view.strategy == "strict":
+        attempts.append({
+            **primary_kwargs,
+            "favor_precision": False,
+            "favor_recall": False,
+        })
 
-    # include_images: 如果 strip_selectors 包含 img，则不保留图片
-    include_images = "img" not in strip_selectors
+    if view.strategy != "loose":
+        attempts.append({
+            **primary_kwargs,
+            "favor_precision": False,
+            "favor_recall": True,
+        })
 
+    attempts.append({
+        **primary_kwargs,
+        "fast": True,
+        "favor_precision": False,
+        "favor_recall": True,
+    })
+
+    seen_attempts: set[tuple[tuple[str, Any], ...]] = set()
+    for kwargs in attempts:
+        signature = tuple(sorted(kwargs.items()))
+        if signature in seen_attempts:
+            continue
+        seen_attempts.add(signature)
+        extracted = trafilatura.extract(html, **kwargs)
+        if extracted:
+            return extracted
+
+    postbody, baseline_text, _ = trafilatura.baseline(html)
+    if baseline_text:
+        if view.output_format == "html" and postbody is not None:
+            return lxml_html.tostring(postbody, encoding="unicode")
+        return baseline_text
+
+    if view.output_format == "html":
+        return html
+
+    fallback_text = trafilatura.html2txt(html)
+    return fallback_text or ""
+
+
+def render_auto_wait_text(html: str) -> str:
+    """用于 wait_for=auto：只关心可抽取正文文本是否趋于稳定。"""
     extracted = trafilatura.extract(
         html,
-        output_format=output_format,
+        output_format="txt",
         include_comments=False,
-        include_tables=True,
-        include_images=include_images,
-        favor_precision=favor_precision,
-        favor_recall=favor_recall,
+        include_tables=False,
+        include_images=False,
+        include_links=False,
+        include_formatting=False,
+        favor_precision=True,
+        favor_recall=False,
+        deduplicate=True,
     )
     if extracted:
-        return extracted
+        return re.sub(r"\s+", " ", extracted).strip()
 
-    # trafilatura 失败，fallback 到 body 处理
-    soup = BeautifulSoup(html, "html.parser")
-    prepared_root = prepare_body(soup, view)
-    if want_markdown:
-        return markdownify(str(prepared_root))
-    return str(prepared_root)
+    fallback_text = trafilatura.html2txt(html) or ""
+    return re.sub(r"\s+", " ", fallback_text).strip()
 
 
 def _window_start_for_match(match_start: int, max_length: int) -> int:
@@ -88,7 +104,6 @@ def _window_start_for_match(match_start: int, max_length: int) -> int:
 def _build_match_summary(
     full_text: str, match: re.Match[str], max_length: int, text_offset: int = 0
 ) -> MatchSummary:
-    # match.start() 是相对于 search_text 的位置，需要加上 text_offset 得到绝对位置
     absolute_start = match.start() + text_offset
     snippet_radius = max(20, FIND_SNIPPET_MAX_CHARS // 2)
     snippet_start = max(0, absolute_start - snippet_radius)
@@ -124,7 +139,6 @@ def search_in_text(
     else:
         regex = re.compile(re.escape(query), re.IGNORECASE)
 
-    # 从 text_offset 位置开始搜索
     search_start = max(0, text_offset)
     search_text = full_text[search_start:]
     found_matches = list(regex.finditer(search_text))
@@ -139,7 +153,6 @@ def search_in_text(
             "next_cursor": None,
         }
 
-    # 最多返回 MAX_FIND_MATCHES 个
     matches_truncated = matches_total > MAX_FIND_MATCHES
     matches = [
         _build_match_summary(
@@ -148,7 +161,6 @@ def search_in_text(
         for match in found_matches[:MAX_FIND_MATCHES]
     ]
 
-    # next_cursor: 第一个 match 的文本位置（用于续读）
     first = matches[0] if matches else None
     next_cursor = first["cursor"] if first else None
 
