@@ -35,18 +35,23 @@
         "HTTPS_PROXY": "",
         "NO_PROXY": "",
         "ENABLE_AUTH_STEALTH": "true",
-        "BROWSER_LOCALE": "en-US",
-        "BROWSER_TIMEZONE_ID": "Asia/Shanghai",
-        "BROWSER_VIEWPORT_WIDTH": "1366",
-        "BROWSER_VIEWPORT_HEIGHT": "768",
+        "BROWSER_LOCALE": "",
+        "BROWSER_TIMEZONE_ID": "",
         "ENABLE_PROMPT_EXTRACTION": "true",
         "MAX_FIND_MATCHES": "8",
-        "FIND_SNIPPET_MAX_CHARS": "240"
+        "FIND_SNIPPET_MAX_CHARS": "240",
+        "SCHEMA_LANGUAGE": "zh"
       }
     }
   }
 }
 ```
+
+说明：
+
+- `BROWSER_LOCALE` 留空时，使用系统默认 locale。
+- `BROWSER_TIMEZONE_ID` 留空时，使用系统默认时区。
+- `SCHEMA_LANGUAGE` 控制 MCP schema 描述语言，支持 `zh` / `en`。
 
 ## 参数
 
@@ -168,6 +173,7 @@ require_user_intervention: true
 - `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。
 - `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。
 - `FIND_SNIPPET_MAX_CHARS`：每条搜索命中的片段长度上限。
+- `SCHEMA_LANGUAGE`：schema 描述语言，支持 `zh` / `en`。
 
 ### 浏览器 / 会话
 
@@ -175,8 +181,8 @@ require_user_intervention: true
 - `BROWSER_SESSION_MODE`：`auth` 或 `profile`，默认 `auth`。
 - `BROWSER_AUTH_STORAGE_STATE`：`auth` 模式下 `storage_state.json` 的路径。
 - `BROWSER_PROFILE_DIR`：`profile` 模式下 persistent profile 的目录。
-- `BROWSER_LOCALE`：浏览器 locale。
-- `BROWSER_TIMEZONE_ID`：浏览器时区，例如 `Asia/Shanghai`。
+- `BROWSER_LOCALE`：浏览器 locale，留空则使用系统默认。
+- `BROWSER_TIMEZONE_ID`：浏览器时区，留空则使用系统默认。
 - `BROWSER_COLOR_SCHEME`：颜色方案，默认 `light`。
 - `BROWSER_VIEWPORT_WIDTH`：viewport 宽度。
 - `BROWSER_VIEWPORT_HEIGHT`：viewport 高度。
