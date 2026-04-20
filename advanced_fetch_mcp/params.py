@@ -2,29 +2,34 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION, MEDIA_REMOVE_TAGS
+from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION
 
 FetchMode = Literal["dynamic", "static"]
 ExtractStrategy = Literal["strict", "loose", "none"]
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["read", "find", "extract", "eval"]
+WaitForValue = float | Literal["auto"]
+SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
 
 UrlParam = Annotated[str, Field(description="目标网址。")]
 ModeParam = Annotated[
     FetchMode,
     Field(
         default="dynamic",
-        description="页面抓取方式。dynamic 使用 Playwright；static 直接获取页面响应。",
+        description="页面抓取方式。dynamic（推荐）使用 Playwright；static 直接获取页面响应。",
     ),
 ]
 WaitForParam = Annotated[
-    float,
+    WaitForValue,
     Field(
-        default=0.0,
-        ge=0,
-        description="dynamic 模式下，networkidle 后额外等待秒数（适合有懒加载内容的页面）。",
+        default="auto",
+        description=(
+            "dynamic 模式下的额外等待策略。"
+            "auto（默认）会在页面加载后自动等待正文变得更完整；"
+            "也可传入秒数，表示在页面加载后额外等待指定秒数。"
+        ),
     ),
 ]
 TimeoutParam = Annotated[
@@ -35,21 +40,25 @@ OutputFormatParam = Annotated[
     OutputFormat,
     Field(
         default="markdown",
-        description="输出格式。markdown 返回 Markdown；html 返回原始 HTML。",
+        description="输出格式。markdown 返回 Trafilatura 生成的 Markdown；html 返回 Trafilatura 抽取后的 HTML。",
     ),
 ]
 StrategyParam = Annotated[
     ExtractStrategy,
     Field(
         default="strict",
-        description="提取策略。strict 优先提取最小正文；loose 优先避免误删；none 返回完整 body。",
+        description="提取策略。strict 偏正文纯度；loose 偏召回；none 使用 Trafilatura 默认平衡策略。",
     ),
 ]
-StripSelectorsParam = Annotated[
-    list[str],
+ExtraElementsParam = Annotated[
+    list[SemanticExtra],
     Field(
-        default=list(MEDIA_REMOVE_TAGS),
-        description="按这些 CSS selector 剔除节点。默认剔除媒体标签（video/audio/img 等）。传空列表保留全部。",
+        default=["tables"],
+        description=(
+            "基于 Trafilatura 语义提取时额外保留的元素。"
+            "可选值：comments、tables、images、links、formatting。"
+            "默认仅保留 tables。"
+        ),
     ),
 ]
 CursorParam = Annotated[
@@ -57,7 +66,7 @@ CursorParam = Annotated[
     Field(
         default=None,
         ge=0,
-        description="文本位置偏移。从该位置续读或继续搜索。（受输出格式和提取策略影响）",
+        description="文本位置偏移，从该位置续读或继续搜索。（受输出格式和提取策略影响；给定此参数则优先使用缓存)",
     ),
 ]
 MaxLengthParam = Annotated[
@@ -67,7 +76,7 @@ FindInPageParam = Annotated[
     Optional[str],
     Field(
         default=None,
-        description="页面内搜索，返回 matches 列表，适合在长页面中定位关键部分。",
+        description="页面内搜索，返回 matches 列表，适合在长页面中定位关键部分。(给定此参数则优先使用缓存)",
     ),
 ]
 FindWithRegexParam = Annotated[
@@ -88,7 +97,7 @@ EvaluateJsParam = Annotated[
     Optional[str],
     Field(
         default=None,
-        description="在页面上下文中执行 JavaScript，返回脚本结果。（不使用缓存）",
+        description="在页面上下文中执行 JavaScript，返回脚本结果。",
     ),
 ]
 RequireInterventionParam = Annotated[
@@ -97,10 +106,6 @@ RequireInterventionParam = Annotated[
         default=False,
         description="需要登录/过验证码时设为 true，打开可见浏览器让用户手动操作，用户操作完成后自动继续。",
     ),
-]
-RefreshCacheParam = Annotated[
-    bool,
-    Field(default=False, description="是否忽略已有缓存重新抓取。")
 ]
 
 
@@ -113,7 +118,7 @@ class AdvancedFetchParams(BaseModel):
     timeout: TimeoutParam
     output_format: OutputFormatParam
     strategy: StrategyParam
-    strip_selectors: StripSelectorsParam
+    extra_elements: ExtraElementsParam
     cursor: CursorParam
     max_length: MaxLengthParam
     find_in_page: FindInPageParam
@@ -121,7 +126,6 @@ class AdvancedFetchParams(BaseModel):
     extract_prompt: ExtractPromptParam
     evaluate_js: EvaluateJsParam
     require_user_intervention: RequireInterventionParam
-    refresh_cache: RefreshCacheParam
 
     @property
     def operation(self) -> Operation:
@@ -135,18 +139,43 @@ class AdvancedFetchParams(BaseModel):
 
     @property
     def should_skip_cache(self) -> bool:
-        return (
-            self.require_user_intervention
-            or self.evaluate_js is not None
-            or self.refresh_cache
-        )
+        return not (self.find_in_page or self.cursor)
 
     def to_render_config(self) -> "RenderConfig":
         return RenderConfig(
             output_format=self.output_format,
             strategy=self.strategy,
-            strip_selectors=self.strip_selectors,
+            extra_elements=self.extra_elements,
         )
+
+    @field_validator("wait_for", mode="before")
+    @classmethod
+    def _normalize_wait_for(cls, value):
+        if value is None or value == "":
+            return "auto"
+        if isinstance(value, str):
+            stripped = value.strip().lower()
+            if stripped == "auto":
+                return "auto"
+            return float(stripped)
+        return value
+
+    @field_validator("extra_elements", mode="before")
+    @classmethod
+    def _normalize_extra_elements(cls, value):
+        if value is None:
+            return ["tables"]
+        if isinstance(value, str):
+            value = [value]
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            text = str(item).strip().lower()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            normalized.append(text)
+        return normalized
 
     @model_validator(mode="after")
     def _validate_semantics(self) -> "AdvancedFetchParams":
@@ -166,10 +195,12 @@ class AdvancedFetchParams(BaseModel):
             raise ValueError("提供 extract_prompt 时，不能再同时提供 find_in_page。")
         if self.find_in_page is None and self.find_with_regex:
             raise ValueError("find_with_regex 需要配合 find_in_page 使用。")
+        if self.wait_for != "auto" and self.wait_for < 0:
+            raise ValueError("wait_for 必须为非负数或 auto。")
         return self
 
 
 class RenderConfig(BaseModel):
     output_format: OutputFormatParam
     strategy: StrategyParam
-    strip_selectors: StripSelectorsParam
+    extra_elements: ExtraElementsParam
