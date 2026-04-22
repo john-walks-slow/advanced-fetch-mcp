@@ -129,6 +129,7 @@ async def execute_advanced_fetch(
             url,
             request.fetch.mode,
             request.fetch.require_user_intervention,
+            request.fetch.min_stable_seconds,
             request.fetch.timeout,
         )
         store_cached_fetch(url, request.fetch.mode, fetch_result.final_url, fetch_result.html)
@@ -141,6 +142,7 @@ async def execute_advanced_fetch(
         value = await evaluate_script_on_page(
             url=fetch_result.final_url,
             require_user_intervention=request.fetch.require_user_intervention,
+            min_stable_seconds=request.fetch.min_stable_seconds,
             script=request.eval.script if request.eval else "",
             timeout=request.fetch.timeout,
         )

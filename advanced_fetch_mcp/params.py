@@ -71,6 +71,17 @@ RequireInterventionParam = Annotated[
         ),
     ),
 ]
+MinStableSecondsParam = Annotated[
+    Optional[float],
+    Field(
+        default=None,
+        ge=0.1,
+        description=schema_text(
+            "动态抓取时等待内容稳定的最小时长（秒）。默认使用环境变量 AUTO_WAIT_MIN_STABLE_SECONDS。",
+            "Minimum stable duration (seconds) for dynamic fetch. Defaults to AUTO_WAIT_MIN_STABLE_SECONDS env var.",
+        ),
+    ),
+]
 OutputFormatParam = Annotated[
     OutputFormat,
     Field(
@@ -200,6 +211,7 @@ class FetchParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: FetchModeParam
+    min_stable_seconds: MinStableSecondsParam
     timeout: TimeoutParam
     require_user_intervention: RequireInterventionParam
 

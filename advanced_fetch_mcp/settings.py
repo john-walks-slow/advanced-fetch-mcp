@@ -120,6 +120,11 @@ INTERVENTION_BUTTON_ID = "advanced-fetch-intervention-done"
 FETCH_TIMEOUT_SECONDS = env_float("FETCH_TIMEOUT", 30.0, minimum=1.0)
 IGNORE_SSL_ERRORS = env_flag("IGNORE_SSL_ERRORS", False)
 
+AUTO_WAIT_POLL_INTERVAL_SECONDS = env_float("AUTO_WAIT_POLL_INTERVAL", 0.25, minimum=0.05)
+AUTO_WAIT_MIN_STABLE_SECONDS = env_float("AUTO_WAIT_MIN_STABLE_SECONDS", 1.0, minimum=0.1)
+AUTO_WAIT_SAMPLE_EDGE_CHARS = int(os.getenv("AUTO_WAIT_SAMPLE_EDGE_CHARS", "200"))
+AUTO_WAIT_EARLY_EXIT_MIN_LENGTH = int(os.getenv("AUTO_WAIT_EARLY_EXIT_MIN_LENGTH", "5000"))
+
 if IGNORE_SSL_ERRORS:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
