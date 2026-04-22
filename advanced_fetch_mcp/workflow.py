@@ -125,11 +125,13 @@ async def execute_advanced_fetch(
         fetch_result = FetchResult(html=html, final_url=final_url)
         logger.info("[Tool] 命中缓存")
     else:
+        early_exit_min_length = (request.render.cursor or 0) + request.max_length
         fetch_result = await fetch_url(
             url,
             request.fetch.mode,
             request.fetch.require_user_intervention,
             request.fetch.min_stable_seconds,
+            early_exit_min_length,
             request.fetch.timeout,
         )
         store_cached_fetch(url, request.fetch.mode, fetch_result.final_url, fetch_result.html)

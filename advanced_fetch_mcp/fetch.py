@@ -22,7 +22,6 @@ from .settings import (
     AUTO_WAIT_POLL_INTERVAL_SECONDS,
     AUTO_WAIT_MIN_STABLE_SECONDS,
     AUTO_WAIT_SAMPLE_EDGE_CHARS,
-    AUTO_WAIT_EARLY_EXIT_MIN_LENGTH,
 )
 
 TimeoutStage = Literal["goto", "networkidle", "static_request"]
@@ -152,7 +151,12 @@ def _is_extracted_text_stable(current: str, previous: str) -> bool:
     )
 
 
-async def _wait_for_content_stable(page: Page, deadline: float, min_stable_seconds: Optional[float] = None) -> None:
+async def _wait_for_content_stable(
+    page: Page,
+    deadline: float,
+    min_stable_seconds: Optional[float] = None,
+    early_exit_min_length: Optional[int] = None,
+) -> None:
     effective_min_stable = min_stable_seconds if min_stable_seconds is not None else AUTO_WAIT_MIN_STABLE_SECONDS
     previous_extracted_text: Optional[str] = None
     previous_url: Optional[str] = None
@@ -186,7 +190,7 @@ async def _wait_for_content_stable(page: Page, deadline: float, min_stable_secon
                 
                 stable_duration = now - stable_since
                 if stable_duration >= effective_min_stable:
-                    if len(current_stripped) >= AUTO_WAIT_EARLY_EXIT_MIN_LENGTH:
+                    if early_exit_min_length is not None and len(current_stripped) >= early_exit_min_length:
                         logger.info("[DynamicFetch] 内容长度达标且稳定，提前退出 (len=%d)", len(current_stripped))
                     else:
                         logger.info("[DynamicFetch] 正文已稳定")
@@ -207,6 +211,7 @@ async def dynamic_fetch(
     url: str,
     require_user_intervention: bool = False,
     min_stable_seconds: Optional[float] = None,
+    early_exit_min_length: Optional[int] = None,
     timeout: Optional[float] = None,
 ) -> FetchResult:
     total_timeout = timeout if timeout is not None else FETCH_TIMEOUT_SECONDS
@@ -263,7 +268,7 @@ async def dynamic_fetch(
                         exc,
                     )
 
-                await _wait_for_content_stable(page, deadline, min_stable_seconds)
+                await _wait_for_content_stable(page, deadline, min_stable_seconds, early_exit_min_length)
 
             if require_user_intervention:
                 html, final_url, intervention_ended_by = (
@@ -294,6 +299,7 @@ async def fetch_url(
     mode: FetchMode,
     require_user_intervention: bool,
     min_stable_seconds: Optional[float] = None,
+    early_exit_min_length: Optional[int] = None,
     timeout: Optional[float] = None,
 ) -> FetchResult:
     if mode == "dynamic" or require_user_intervention:
@@ -301,6 +307,7 @@ async def fetch_url(
             url=url,
             require_user_intervention=require_user_intervention,
             min_stable_seconds=min_stable_seconds,
+            early_exit_min_length=early_exit_min_length,
             timeout=timeout,
         )
     return static_fetch(url, timeout)
@@ -353,7 +360,7 @@ async def evaluate_script_on_page(
                 except Exception:
                     pass
 
-                await _wait_for_content_stable(page, deadline, min_stable_seconds)
+                await _wait_for_content_stable(page, deadline, min_stable_seconds, None)
 
             if require_user_intervention:
                 await wait_for_intervention_end(page)
