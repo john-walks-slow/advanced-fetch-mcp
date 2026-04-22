@@ -117,23 +117,23 @@ DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", "8000"))
 INTERVENTION_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", "600"))
 INTERVENTION_BUTTON_ID = "advanced-fetch-intervention-done"
 
-DEFAULT_TIMEOUT_SECONDS = env_float("DEFAULT_TIMEOUT", 10.0, minimum=0.1)
-NAVIGATION_TIMEOUT_SECONDS = env_float("NAVIGATION_TIMEOUT", DEFAULT_TIMEOUT_SECONDS, minimum=0.1)
-NETWORK_IDLE_TIMEOUT_SECONDS = env_float("NETWORK_IDLE_TIMEOUT", DEFAULT_TIMEOUT_SECONDS, minimum=0.1)
-STATIC_FETCH_TIMEOUT_SECONDS = env_float("STATIC_FETCH_TIMEOUT", DEFAULT_TIMEOUT_SECONDS, minimum=0.1)
-AUTO_WAIT_TIMEOUT_SECONDS = env_float("AUTO_WAIT_TIMEOUT", min(DEFAULT_TIMEOUT_SECONDS, 5.0), minimum=0.1)
+FETCH_TIMEOUT_SECONDS = env_float("FETCH_TIMEOUT", 30.0, minimum=1.0)
 IGNORE_SSL_ERRORS = env_flag("IGNORE_SSL_ERRORS", False)
 
 if IGNORE_SSL_ERRORS:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", True)
-PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", "16000"))
-MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", "8"))
+PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", "64000"))
+MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", "12"))
 FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", "240"))
 SCHEMA_LANGUAGE = env_choice("SCHEMA_LANGUAGE", "zh", {"zh", "en"})
 
-BROWSER_CHANNEL = (os.getenv("BROWSER_CHANNEL", "chrome") or "chrome").strip() or "chrome"
+BROWSER_CHANNEL = env_choice(
+    "BROWSER_CHANNEL",
+    "chrome",
+    {"chrome", "chrome-beta", "chrome-dev", "msedge", "msedge-beta", "msedge-dev", "chromium"},
+)
 BROWSER_SESSION_MODE = _env_session_mode()
 BROWSER_PROFILE_DIR = Path(
     os.getenv(

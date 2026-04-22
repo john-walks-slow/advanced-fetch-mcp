@@ -12,7 +12,6 @@ class DSLTests(unittest.TestCase):
         request = AdvancedFetchParams(url="https://example.com")
         self.assertEqual(request.operation, "view")
         self.assertEqual(request.fetch.mode, "dynamic")
-        self.assertEqual(request.fetch.wait_for, "auto")
         self.assertEqual(request.render.output_format, "markdown")
         self.assertIsNone(request.render.strategy)
         self.assertEqual(request.render.include_elements, ["tables", "formatting"])
@@ -99,3 +98,30 @@ class DSLTests(unittest.TestCase):
                 url="https://example.com",
                 render={"max_length": 123},
             )
+
+    def test_can_use_cache_true_for_find_operation(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={"query": "x"},
+        )
+        self.assertTrue(request.can_use_cache)
+
+    def test_can_use_cache_true_for_cursor_continuation(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            render={"cursor": 100},
+        )
+        self.assertTrue(request.can_use_cache)
+
+    def test_can_use_cache_false_for_view_without_cursor(self):
+        request = AdvancedFetchParams(url="https://example.com")
+        self.assertFalse(request.can_use_cache)
+
+    def test_can_use_cache_false_for_sampling_operation(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="sampling",
+            sampling={"prompt": "x"},
+        )
+        self.assertFalse(request.can_use_cache)

@@ -10,7 +10,6 @@ FetchMode = Literal["dynamic", "static"]
 ExtractStrategy = Literal["strict", "loose"] | None
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["view", "find", "sampling", "eval"]
-WaitForValue = float | Literal["auto"]
 SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
 
 
@@ -48,16 +47,6 @@ FetchModeParam = Annotated[
         description=schema_text(
             "抓取方式。dynamic：使用浏览器加载并执行页面脚本。static：直接 HTTP 请求页面源码。",
             "Fetch mode. dynamic: use a browser to load the page and execute scripts. static: request the page source directly over HTTP.",
-        ),
-    ),
-]
-WaitForParam = Annotated[
-    WaitForValue,
-    Field(
-        default="auto",
-        description=schema_text(
-            "等待策略（仅 dynamic 模式有效）。auto：自动等待网络空闲且正文区域稳定。数字：页面加载后额外等待的秒数。",
-            "Wait strategy (only effective in dynamic mode). auto: automatically wait until the network is idle and the main-content area is stable. Number: extra seconds to wait after page load.",
         ),
     ),
 ]
@@ -162,6 +151,40 @@ SamplingPromptParam = Annotated[
         )
     ),
 ]
+SamplingModelParam = Annotated[
+    Optional[str],
+    Field(
+        default=None,
+        description=schema_text(
+            "偏好使用的模型名称。常见值：claude-3-5-haiku、gpt-4o-mini、gemini-2.0-flash。留空则让客户端自动选择。",
+            "Preferred model name. Common values: claude-3-5-haiku, gpt-4o-mini, gemini-2.0-flash. Leave empty for client auto-selection.",
+        ),
+    ),
+]
+SamplingSpeedPriorityParam = Annotated[
+    Optional[float],
+    Field(
+        default=0.8,
+        ge=0.0,
+        le=1.0,
+        description=schema_text(
+            "模型速度优先级 (0-1)。值越高越偏好快速模型。",
+            "Model speed priority (0-1). Higher values prefer faster models.",
+        ),
+    ),
+]
+SamplingIntelligencePriorityParam = Annotated[
+    Optional[float],
+    Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=schema_text(
+            "模型智能优先级 (0-1)。值越高越偏好更智能的模型。",
+            "Model intelligence priority (0-1). Higher values prefer more intelligent models.",
+        ),
+    ),
+]
 EvalScriptParam = Annotated[
     str,
     Field(
@@ -177,32 +200,8 @@ class FetchParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: FetchModeParam
-    wait_for: WaitForParam
     timeout: TimeoutParam
     require_user_intervention: RequireInterventionParam
-
-    @field_validator("wait_for", mode="before")
-    @classmethod
-    def _normalize_wait_for(cls, value):
-        if value is None or value == "":
-            return "auto"
-        if isinstance(value, str):
-            stripped = value.strip().lower()
-            if stripped == "auto":
-                return "auto"
-            return float(stripped)
-        return value
-
-    @model_validator(mode="after")
-    def _validate_wait_for(self) -> "FetchParams":
-        if self.wait_for != "auto" and self.wait_for < 0:
-            raise ValueError(
-                schema_error(
-                    "fetch.wait_for 必须为非负数或 auto。",
-                    "fetch.wait_for must be a non-negative number or auto.",
-                )
-            )
-        return self
 
 
 class RenderParams(BaseModel):
@@ -211,7 +210,6 @@ class RenderParams(BaseModel):
     output_format: OutputFormatParam
     strategy: StrategyParam
     include_elements: IncludeElementsParam
-    max_length: MaxLengthParam
     cursor: CursorParam
 
     @field_validator("include_elements", mode="before")
@@ -243,6 +241,9 @@ class SamplingParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     prompt: SamplingPromptParam
+    model: SamplingModelParam
+    speed_priority: SamplingSpeedPriorityParam
+    intelligence_priority: SamplingIntelligencePriorityParam
 
 
 class EvalParams(BaseModel):
@@ -266,8 +267,8 @@ RenderParam = Annotated[
     Field(
         default_factory=RenderParams,
         description=schema_text(
-            "正文提取、输出格式及结果窗口控制。",
-            "Main-content extraction, output-format, and result-window configuration.",
+            "正文提取、输出格式及续读配置。",
+            "Main-content extraction, output-format, and continue-read configuration.",
         ),
     ),
 ]
@@ -310,13 +311,14 @@ class AdvancedFetchParams(BaseModel):
     operation: OperationParam
     fetch: FetchParam
     render: RenderParam
+    max_length: MaxLengthParam
     find: FindParam
     sampling: SamplingParam
     eval: EvalParam
 
     @property
-    def should_skip_cache(self) -> bool:
-        return not (self.operation == "find" or self.render.cursor is not None)
+    def can_use_cache(self) -> bool:
+        return self.operation == "find" or self.render.cursor is not None
 
     def to_render_config(self) -> "RenderConfig":
         return RenderConfig(

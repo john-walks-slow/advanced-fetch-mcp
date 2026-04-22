@@ -8,7 +8,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Main-content extraction**: Built on top of trafilatura with configurable extraction strategy and scope, removing as much noise as possible to save tokens.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
 - **LLM Sampling**: Use `sampling.prompt` to refine page content and return a condensed result, avoiding raw page content polluting the caller context.
-- **Chunked reading for large pages**: Supports `find.query` for searching within a page, and `render.cursor` + `render.max_length` to continue reading from any position.
+- **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `render.cursor` plus top-level `max_length` to continue reading from any position.
 - **Manual intervention and auth**: `fetch.require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
@@ -38,7 +38,8 @@ More capable than vanilla fetch, simpler than using Playwright directly.
         "BROWSER_LOCALE": "",
         "BROWSER_TIMEZONE_ID": "",
         "ENABLE_PROMPT_EXTRACTION": "true",
-        "MAX_FIND_MATCHES": "8",
+        "PROMPT_INPUT_MAX_CHARS": "64000",
+        "MAX_FIND_MATCHES": "12",
         "FIND_SNIPPET_MAX_CHARS": "240",
         "SCHEMA_LANGUAGE": "en"
       }
@@ -62,7 +63,8 @@ Notes:
 | `url` | `string` | Required | Full URL of the target webpage. |
 | `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation type. `view`: get the page main content. `find`: search matches in the main content. `sampling`: use an LLM to extract information from the main content. `eval`: execute JavaScript in the page context and return the result. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
-| `render` | `object` | See below | Main-content extraction, output-format, and result-window configuration. |
+| `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
+| `max_length` | `integer` | `8000` | Maximum text length. |
 | `find` | `object \| null` | `null` | Find configuration. Provide only when `operation="find"`. |
 | `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when `operation="sampling"`. |
 | `eval` | `object \| null` | `null` | Script configuration. Provide only when `operation="eval"`. |
@@ -83,7 +85,6 @@ Notes:
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
 | `render.strategy` | `"strict" \| "loose" \| null` | `null` | Main-content extraction strategy. `strict`: prioritize content purity. `loose`: prioritize content coverage. `null`: use the default balanced strategy. |
 | `render.include_elements` | `Array<"tables" \| "formatting" \| "images" \| "links" \| "comments">` | `["tables", "formatting"]` | Content types to include in addition to the main content. |
-| `render.max_length` | `integer` | `8000` | Maximum text length. |
 | `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 
 ### 4. `find` object
@@ -111,7 +112,7 @@ Notes:
 | :--- | :--- |
 | Operation-specific config | The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive. |
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
-| `render.max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, truncating the final returned content. |
+| `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, truncating the final returned content. |
 | `render.cursor` scope | Only valid for `view` and `find`. Used to continue reading or searching from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
 
@@ -145,7 +146,7 @@ Notes:
 | `timed_out` | `boolean` | No | Present when a timeout occurred during fetching. |
 | `timeout_stage` | `string` | No | Stage where the timeout occurred. |
 | `intervention_ended_by` | `string` | No | Why manual intervention ended, for example `timeout` or `page_closed`. |
-| `truncated` | `boolean` | No | Present when the returned content was truncated by `render.max_length`. |
+| `truncated` | `boolean` | No | Present when the returned content was truncated by `max_length`. |
 | `next_cursor` | `integer` | No | Returned when more content can be read or searched from a later offset. |
 | `warnings` | `string[]` | No | Warning messages. |
 
@@ -285,9 +286,9 @@ Continue reading from a search position:
 ```yaml
 url: https://example.com
 operation: view
+max_length: 300
 render:
   cursor: 300 # assume this is a cursor returned from a previous match
-  max_length: 300
 ```
 
 Use sampling to refine the result:

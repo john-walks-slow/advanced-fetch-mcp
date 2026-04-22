@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from advanced_fetch_mcp.browser import BrowserManager
 from advanced_fetch_mcp.fetch import (
@@ -21,7 +21,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
             "advanced_fetch_mcp.fetch.dynamic_fetch",
             new=AsyncMock(return_value=FetchResult(html="x", final_url="u")),
         ) as mock_dynamic:
-            result = await fetch_url("https://example.com", "static", 0, True)
+            result = await fetch_url("https://example.com", "static", True)
         mock_dynamic.assert_awaited_once()
         self.assertEqual(result.final_url, "u")
 
@@ -30,7 +30,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
             "advanced_fetch_mcp.fetch.dynamic_fetch",
             new=AsyncMock(return_value=FetchResult(html="x", final_url="u")),
         ) as mock_dynamic:
-            result = await fetch_url("https://example.com", "dynamic", 0, True)
+            result = await fetch_url("https://example.com", "dynamic", True)
         mock_dynamic.assert_awaited_once()
         self.assertEqual(result.final_url, "u")
 
@@ -86,6 +86,14 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         result = static_fetch("https://httpbin.org/delay/5", timeout=0.1)
         self.assertTrue(result.timed_out)
         self.assertEqual(result.timeout_stage, "static_request")
+        self.assertEqual(result.html, "")
+
+    def test_static_fetch_returns_empty_on_connection_error(self):
+        from advanced_fetch_mcp.fetch import static_fetch
+
+        result = static_fetch("https://invalid.nonexistent.tld/page", timeout=0.5)
+        self.assertFalse(result.timed_out)
+        self.assertIsNone(result.timeout_stage)
         self.assertEqual(result.html, "")
 
     def test_proxy_settings_reads_http_proxy(self):
@@ -162,3 +170,106 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         playwright.stop.assert_awaited_once()
         self.assertEqual(manager._shared_profile_contexts, {})
         self.assertIsNone(manager._shared_playwright)
+
+
+class ShouldBypassProxyTests(unittest.TestCase):
+    def test_bypass_matches_exact_host(self):
+        from advanced_fetch_mcp.settings import should_bypass_proxy
+
+        with patch("advanced_fetch_mcp.settings.get_no_proxy", return_value="localhost"):
+            self.assertTrue(should_bypass_proxy("http://localhost/page"))
+
+    def test_bypass_matches_domain_suffix(self):
+        from advanced_fetch_mcp.settings import should_bypass_proxy
+
+        with patch("advanced_fetch_mcp.settings.get_no_proxy", return_value=".example.com"):
+            self.assertTrue(should_bypass_proxy("http://sub.example.com/page"))
+            self.assertTrue(should_bypass_proxy("http://example.com/page"))
+
+    def test_bypass_wildcard_matches_all(self):
+        from advanced_fetch_mcp.settings import should_bypass_proxy
+
+        with patch("advanced_fetch_mcp.settings.get_no_proxy", return_value="*"):
+            self.assertTrue(should_bypass_proxy("http://any.host/page"))
+
+    def test_no_bypass_when_not_in_no_proxy(self):
+        from advanced_fetch_mcp.settings import should_bypass_proxy
+
+        with patch("advanced_fetch_mcp.settings.get_no_proxy", return_value="localhost"):
+            self.assertFalse(should_bypass_proxy("http://external.com/page"))
+
+    def test_no_bypass_when_no_proxy_empty(self):
+        from advanced_fetch_mcp.settings import should_bypass_proxy
+
+        with patch("advanced_fetch_mcp.settings.get_no_proxy", return_value=None):
+            self.assertFalse(should_bypass_proxy("http://localhost/page"))
+
+
+class TruncateTextMiddleTests(unittest.TestCase):
+    def test_no_truncation_when_short(self):
+        from advanced_fetch_mcp.workflow import _truncate_text_middle
+
+        result, truncated = _truncate_text_middle("short", 10)
+        self.assertEqual(result, "short")
+        self.assertFalse(truncated)
+
+    def test_truncates_middle_when_long(self):
+        from advanced_fetch_mcp.workflow import _truncate_text_middle
+
+        text = "0123456789abcdefghij"
+        result, truncated = _truncate_text_middle(text, 10)
+        self.assertTrue(truncated)
+        self.assertIn("<", result)
+        self.assertTrue(len(result) <= 10)
+
+    def test_returns_marker_when_max_length_equals_marker(self):
+        from advanced_fetch_mcp.workflow import _truncate_text_middle
+
+        text = "verylongtext"
+        result, truncated = _truncate_text_middle(text, 3)
+        self.assertTrue(truncated)
+        self.assertEqual(len(result), 3)
+
+    def test_handles_empty_text(self):
+        from advanced_fetch_mcp.workflow import _truncate_text_middle
+
+        result, truncated = _truncate_text_middle("", 10)
+        self.assertEqual(result, "")
+        self.assertFalse(truncated)
+
+
+class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
+    async def test_handles_goto_timeout_gracefully(self):
+        from advanced_fetch_mcp.fetch import evaluate_script_on_page
+        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+
+        mock_page = MagicMock()
+        mock_page.goto = AsyncMock(side_effect=PlaywrightTimeoutError("timeout"))
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.evaluate = AsyncMock(return_value="result")
+        mock_page.is_closed = MagicMock(return_value=False)
+        mock_page.close = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html><body>test</body></html>")
+        mock_page.url = "https://example.com"
+
+        mock_context = MagicMock()
+        mock_context.add_init_script = AsyncMock()
+        mock_context.new_page = AsyncMock(return_value=mock_page)
+
+        mock_session_cm = AsyncMock()
+        mock_session_cm.__aenter__.return_value = mock_context
+        mock_session_cm.__aexit__.return_value = None
+
+        mock_manager = MagicMock()
+        mock_manager.open_session = MagicMock(return_value=mock_session_cm)
+
+        with patch("advanced_fetch_mcp.fetch.browser_manager", mock_manager):
+            with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
+                result = await evaluate_script_on_page(
+                    url="https://example.com",
+                    require_user_intervention=False,
+                    script="document.title",
+                    timeout=1.0,
+                )
+
+        self.assertEqual(result, "result")

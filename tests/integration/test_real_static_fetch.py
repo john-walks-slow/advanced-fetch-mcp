@@ -40,10 +40,11 @@ class TestRealStaticFetch:
         assert result.timeout_stage == "static_request"
         assert result.html == ""
 
-    def test_http_error_raises_for_status(self):
-        """HTTP 错误状态码应抛异常（被 requests 处理）。"""
-        with pytest.raises(requests.HTTPError):
-            static_fetch("https://httpbin.org/status/404", timeout=10)
+    def test_http_error_returns_empty_result(self):
+        """HTTP 错误状态码应返回空结果而非抛异常。"""
+        result = static_fetch("https://httpbin.org/status/404", timeout=10)
+        assert result.html == ""
+        assert not result.timed_out
 
     def test_final_url_matches_response_url(self):
         """final_url 应反映重定向后的实际 URL。"""

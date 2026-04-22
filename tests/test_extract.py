@@ -79,6 +79,17 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(result["text"], "")
         self.assertIsNone(result["next_cursor"])
 
+    def test_continue_returns_only_text_and_cursor(self):
+        result = continue_in_text("0123456789abcdef", 0, 5)
+        self.assertEqual(set(result.keys()), {"text", "next_cursor"})
+        self.assertEqual(result["text"], "01234")
+        self.assertEqual(result["next_cursor"], 5)
+
+    def test_continue_at_exact_end_returns_no_cursor(self):
+        result = continue_in_text("01234", 0, 5)
+        self.assertEqual(result["text"], "01234")
+        self.assertIsNone(result["next_cursor"])
+
     def test_trafilatura_fallback_on_empty_extraction(self):
         html = "<html><body>Plain text only</body></html>"
         view = RenderConfig(output_format="markdown", strategy="strict")

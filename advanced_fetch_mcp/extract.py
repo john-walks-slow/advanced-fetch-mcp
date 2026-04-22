@@ -198,19 +198,11 @@ def continue_in_text(full_text: str, cursor: int, max_length: int) -> Dict[str, 
     if start >= len(full_text):
         return {
             "text": "",
-            "found": True,
-            "matches": [],
-            "matches_total": 0,
-            "matches_truncated": False,
             "next_cursor": None,
         }
     end = min(len(full_text), start + max_length)
     next_cursor = encode_cursor(end) if end < len(full_text) else None
     return {
         "text": full_text[start:end],
-        "found": True,
-        "matches": [],
-        "matches_total": 0,
-        "matches_truncated": False,
         "next_cursor": next_cursor,
     }

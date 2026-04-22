@@ -116,8 +116,8 @@ async def execute_advanced_fetch(
 ) -> Dict[str, Any]:
     url = request.url
 
-    skip_cache = request.should_skip_cache
-    cached = get_cached_fetch(url, request.fetch.mode) if not skip_cache else None
+    can_use_cache = request.can_use_cache
+    cached = get_cached_fetch(url, request.fetch.mode) if can_use_cache else None
     cache_hit = cached is not None
 
     if cached is not None:
@@ -128,7 +128,6 @@ async def execute_advanced_fetch(
         fetch_result = await fetch_url(
             url,
             request.fetch.mode,
-            request.fetch.wait_for,
             request.fetch.require_user_intervention,
             request.fetch.timeout,
         )
@@ -141,14 +140,13 @@ async def execute_advanced_fetch(
     if request.operation == "eval":
         value = await evaluate_script_on_page(
             url=fetch_result.final_url,
-            wait_for=request.fetch.wait_for,
             require_user_intervention=request.fetch.require_user_intervention,
             script=request.eval.script if request.eval else "",
             timeout=request.fetch.timeout,
         )
         result_text, truncated = _truncate_text_middle(
             _serialize_result_value(value),
-            request.render.max_length,
+            request.max_length,
         )
         return _build_public_result(
             fetch_result=fetch_result,
@@ -183,7 +181,7 @@ async def execute_advanced_fetch(
         continue_result = continue_in_text(
             rendered,
             request.render.cursor,
-            request.render.max_length,
+            request.max_length,
         )
         return _build_public_result(
             fetch_result=fetch_result,
@@ -195,10 +193,14 @@ async def execute_advanced_fetch(
 
     if request.operation == "sampling":
         try:
+            sampling_config = request.sampling
             prompt_output = await run_prompt_extraction(
                 ctx=ctx,
                 source_text=rendered,
-                prompt=request.sampling.prompt if request.sampling else "",
+                prompt=sampling_config.prompt if sampling_config else "",
+                model=sampling_config.model if sampling_config else None,
+                speed_priority=sampling_config.speed_priority if sampling_config else 0.8,
+                intelligence_priority=sampling_config.intelligence_priority if sampling_config else 0.5,
             )
             result_text = (
                 ""
@@ -211,7 +213,7 @@ async def execute_advanced_fetch(
             result_text = rendered
         result_text, truncated = _truncate_text_middle(
             result_text,
-            request.render.max_length,
+            request.max_length,
         )
         return _build_public_result(
             fetch_result=fetch_result,
@@ -221,7 +223,7 @@ async def execute_advanced_fetch(
             cache_hit=cache_hit,
         )
 
-    view_result = continue_in_text(rendered, 0, request.render.max_length)
+    view_result = continue_in_text(rendered, 0, request.max_length)
     return _build_public_result(
         fetch_result=fetch_result,
         result_payload=view_result["text"],
