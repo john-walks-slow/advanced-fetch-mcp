@@ -82,6 +82,17 @@ MinStableSecondsParam = Annotated[
         ),
     ),
 ]
+MinContentLengthParam = Annotated[
+    Optional[int],
+    Field(
+        default=None,
+        ge=1,
+        description=schema_text(
+            "动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认使用环境变量 AUTO_WAIT_MIN_CONTENT_LENGTH。",
+            "Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Defaults to AUTO_WAIT_MIN_CONTENT_LENGTH env var.",
+        ),
+    ),
+]
 OutputFormatParam = Annotated[
     OutputFormat,
     Field(
@@ -205,30 +216,6 @@ SamplingModelParam = Annotated[
         ),
     ),
 ]
-SamplingSpeedPriorityParam = Annotated[
-    Optional[float],
-    Field(
-        default=0.8,
-        ge=0.0,
-        le=1.0,
-        description=schema_text(
-            "模型速度优先级 (0-1)。值越高越偏好快速模型。",
-            "Model speed priority (0-1). Higher values prefer faster models.",
-        ),
-    ),
-]
-SamplingIntelligencePriorityParam = Annotated[
-    Optional[float],
-    Field(
-        default=0.5,
-        ge=0.0,
-        le=1.0,
-        description=schema_text(
-            "模型智能优先级 (0-1)。值越高越偏好更智能的模型。",
-            "Model intelligence priority (0-1). Higher values prefer more intelligent models.",
-        ),
-    ),
-]
 EvalScriptParam = Annotated[
     str,
     Field(
@@ -245,6 +232,7 @@ class FetchParams(BaseModel):
 
     mode: FetchModeParam
     min_stable_seconds: MinStableSecondsParam
+    min_content_length: MinContentLengthParam
     timeout: TimeoutParam
     require_user_intervention: RequireInterventionParam
 
@@ -290,8 +278,6 @@ class SamplingParams(BaseModel):
 
     prompt: SamplingPromptParam
     model: SamplingModelParam
-    speed_priority: SamplingSpeedPriorityParam
-    intelligence_priority: SamplingIntelligencePriorityParam
 
 
 class EvalParams(BaseModel):

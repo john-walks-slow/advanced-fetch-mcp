@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 import urllib3
 
+from .config_meta import env_default
+
 
 def env_flag(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -106,58 +108,60 @@ def get_requests_proxies(url: Optional[str] = None) -> Optional[dict[str, str]]:
 
 
 def _env_session_mode() -> Literal["auth", "profile"]:
-    raw = (os.getenv("BROWSER_SESSION_MODE", "auth") or "auth").strip().lower()
+    default_mode = env_default("BROWSER_SESSION_MODE")
+    raw = (os.getenv("BROWSER_SESSION_MODE", default_mode) or default_mode).strip().lower()
     if raw in {"auth", "profile"}:
         return raw
-    return "auth"
+    return default_mode
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", "8000"))
-INTERVENTION_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", "600"))
+DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", env_default("DEFAULT_MAX_LENGTH")))
+INTERVENTION_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", env_default("INTERVENTION_TIMEOUT_SECONDS")))
 INTERVENTION_BUTTON_ID = "advanced-fetch-intervention-done"
 
-FETCH_TIMEOUT_SECONDS = env_float("FETCH_TIMEOUT", 30.0, minimum=1.0)
-PER_SITE_RATE_LIMIT_SECONDS = env_float("PER_SITE_RATE_LIMIT_SECONDS", 1.0, minimum=0.0)
-IGNORE_SSL_ERRORS = env_flag("IGNORE_SSL_ERRORS", False)
+FETCH_TIMEOUT_SECONDS = env_float("FETCH_TIMEOUT", float(env_default("FETCH_TIMEOUT")), minimum=1.0)
+PER_SITE_RATE_LIMIT_SECONDS = env_float("PER_SITE_RATE_LIMIT_SECONDS", float(env_default("PER_SITE_RATE_LIMIT_SECONDS")), minimum=0.0)
+IGNORE_SSL_ERRORS = env_flag("IGNORE_SSL_ERRORS", env_default("IGNORE_SSL_ERRORS") == "true")
 
-AUTO_WAIT_POLL_INTERVAL_SECONDS = env_float("AUTO_WAIT_POLL_INTERVAL", 0.25, minimum=0.05)
-AUTO_WAIT_MIN_STABLE_SECONDS = env_float("AUTO_WAIT_MIN_STABLE_SECONDS", 1.0, minimum=0.1)
-AUTO_WAIT_SAMPLE_EDGE_CHARS = int(os.getenv("AUTO_WAIT_SAMPLE_EDGE_CHARS", "200"))
+AUTO_WAIT_POLL_INTERVAL_SECONDS = env_float("AUTO_WAIT_POLL_INTERVAL", float(env_default("AUTO_WAIT_POLL_INTERVAL")), minimum=0.05)
+AUTO_WAIT_MIN_STABLE_SECONDS = env_float("AUTO_WAIT_MIN_STABLE_SECONDS", float(env_default("AUTO_WAIT_MIN_STABLE_SECONDS")), minimum=0.1)
+AUTO_WAIT_MIN_CONTENT_LENGTH = int(os.getenv("AUTO_WAIT_MIN_CONTENT_LENGTH", env_default("AUTO_WAIT_MIN_CONTENT_LENGTH")))
+AUTO_WAIT_SAMPLE_EDGE_CHARS = int(os.getenv("AUTO_WAIT_SAMPLE_EDGE_CHARS", env_default("AUTO_WAIT_SAMPLE_EDGE_CHARS")))
 
 if IGNORE_SSL_ERRORS:
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", True)
-PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", "64000"))
-MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", "12"))
-FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", "240"))
-SCHEMA_LANGUAGE = env_choice("SCHEMA_LANGUAGE", "zh", {"zh", "en"})
+ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", env_default("ENABLE_PROMPT_EXTRACTION") == "true")
+PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", env_default("PROMPT_INPUT_MAX_CHARS")))
+MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", env_default("MAX_FIND_MATCHES")))
+FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", env_default("FIND_SNIPPET_MAX_CHARS")))
+SCHEMA_LANGUAGE = env_choice("SCHEMA_LANGUAGE", env_default("SCHEMA_LANGUAGE"), {"zh", "en"})
 
 BROWSER_CHANNEL = env_choice(
     "BROWSER_CHANNEL",
-    "chrome",
+    env_default("BROWSER_CHANNEL"),
     {"chrome", "chrome-beta", "chrome-dev", "msedge", "msedge-beta", "msedge-dev", "chromium"},
 )
 BROWSER_SESSION_MODE = _env_session_mode()
 BROWSER_PROFILE_DIR = Path(
     os.getenv(
         "BROWSER_PROFILE_DIR",
-        str(Path.home() / ".advanced-fetch-profile"),
+        env_default("BROWSER_PROFILE_DIR"),
     )
 ).expanduser()
 AUTH_STORAGE_STATE_PATH = Path(
     os.getenv(
         "BROWSER_AUTH_STORAGE_STATE",
-        str(Path.home() / ".advanced-fetch-auth" / "storage_state.json"),
+        env_default("BROWSER_AUTH_STORAGE_STATE"),
     )
 ).expanduser()
 BROWSER_LOCALE = env_optional_str("BROWSER_LOCALE")
 BROWSER_TIMEZONE_ID = env_optional_str("BROWSER_TIMEZONE_ID")
-BROWSER_COLOR_SCHEME = os.getenv("BROWSER_COLOR_SCHEME", "light").strip() or "light"
-BROWSER_VIEWPORT_WIDTH = max(320, int(os.getenv("BROWSER_VIEWPORT_WIDTH", "1366")))
-BROWSER_VIEWPORT_HEIGHT = max(320, int(os.getenv("BROWSER_VIEWPORT_HEIGHT", "768")))
-ENABLE_AUTH_STEALTH = env_flag("ENABLE_AUTH_STEALTH", True)
+BROWSER_COLOR_SCHEME = os.getenv("BROWSER_COLOR_SCHEME", env_default("BROWSER_COLOR_SCHEME")).strip() or env_default("BROWSER_COLOR_SCHEME")
+BROWSER_VIEWPORT_WIDTH = max(320, int(os.getenv("BROWSER_VIEWPORT_WIDTH", env_default("BROWSER_VIEWPORT_WIDTH"))))
+BROWSER_VIEWPORT_HEIGHT = max(320, int(os.getenv("BROWSER_VIEWPORT_HEIGHT", env_default("BROWSER_VIEWPORT_HEIGHT"))))
+ENABLE_AUTH_STEALTH = env_flag("ENABLE_AUTH_STEALTH", env_default("ENABLE_AUTH_STEALTH") == "true")
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

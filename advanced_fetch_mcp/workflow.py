@@ -13,7 +13,7 @@ from .fetch import (
 )
 from .params import AdvancedFetchParams
 from .sampling import run_prompt_extraction
-from .settings import logger
+from .settings import AUTO_WAIT_MIN_CONTENT_LENGTH, logger
 
 FIND_MATCHES_WARNING = "命中数量过多，matches 已按请求参数或服务默认限制截断。"
 CACHE_HIT_WARNING = (
@@ -134,7 +134,7 @@ async def execute_advanced_fetch(
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
-        )
+)
 
     can_use_cache = request.can_use_cache
     cached = get_cached_fetch(url, request.fetch.mode) if can_use_cache else None
@@ -145,7 +145,9 @@ async def execute_advanced_fetch(
         fetch_result = FetchResult(html=html, final_url=final_url)
         logger.info("[Tool] 命中缓存")
     else:
-        early_exit_min_length = (request.render.cursor or 0) + request.max_length
+        early_exit_min_length = request.fetch.min_content_length if request.fetch.min_content_length is not None else AUTO_WAIT_MIN_CONTENT_LENGTH
+        if request.can_use_cache:
+            early_exit_min_length = max(early_exit_min_length, (request.render.cursor or 0) + request.max_length)
         fetch_result = await fetch_url(
             url,
             request.fetch.mode,
@@ -206,8 +208,6 @@ async def execute_advanced_fetch(
                 source_text=rendered,
                 prompt=sampling_config.prompt if sampling_config else "",
                 model=sampling_config.model if sampling_config else None,
-                speed_priority=sampling_config.speed_priority if sampling_config else 0.8,
-                intelligence_priority=sampling_config.intelligence_priority if sampling_config else 0.5,
             )
             result_text = (
                 ""

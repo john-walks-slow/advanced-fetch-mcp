@@ -56,64 +56,55 @@
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | 必填 | 目标网页的完整 URL。 |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型。<br>• `view`：获取页面正文。<br>• `find`：在正文中查找匹配项。<br>• `sampling`：使用 LLM 从正文中提取信息。<br>• `eval`：在页面环境中执行 JavaScript 并返回结果。 |
+| `operation` | `"view" | "find" | "sampling" | "eval"` | `"view"` | 操作类型。view：获取页面正文。find：在正文中查找匹配项。sampling：使用 LLM 从正文中提取信息。eval：在页面环境中执行 JavaScript 并返回结果。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `render` | `object` | 见下表 | 正文提取、输出格式及续读配置。 |
 | `max_length` | `integer` | `8000` | 文本最大长度。 |
-| `find` | `object \| null` | `null` | 查找配置。仅当 `operation="find"` 时提供。 |
-| `sampling` | `object \| null` | `null` | 提取配置。仅当 `operation="sampling"` 时提供。 |
-| `eval` | `object \| null` | `null` | 脚本配置。仅当 `operation="eval"` 时提供。 |
-
----
+| `find` | `object | null` | `null` | 查找配置。仅当 operation="find" 时提供。 |
+| `sampling` | `object | null` | `null` | 提取配置。仅当 operation="sampling" 时提供。 |
+| `eval` | `object | null` | `null` | 脚本配置。仅当 operation="eval" 时提供。 |
 
 ### 二、`fetch` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | 抓取方式。<br>• `dynamic`：使用浏览器加载并执行页面脚本。<br>• `static`：直接 HTTP 请求页面源码。 |
-| `fetch.timeout` | `number \| null` | `null` | 抓取总超时秒数。超时后返回当前已获取内容。默认 30 秒。 |
-| `fetch.require_user_intervention` | `boolean` | `false` | 用于需要登录、验证码或人工操作的页面。设为 `true` 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。 |
-
----
+| `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | 抓取方式。dynamic：使用浏览器加载并执行页面脚本。static：直接 HTTP 请求页面源码。 |
+| `fetch.min_stable_seconds` | `number | null` | `null` | 动态抓取时等待内容稳定的最小时长（秒）。默认使用环境变量 AUTO_WAIT_MIN_STABLE_SECONDS。 |
+| `fetch.min_content_length` | `integer | null` | `null` | 动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认使用环境变量 AUTO_WAIT_MIN_CONTENT_LENGTH。 |
+| `fetch.timeout` | `number | null` | `null` | 抓取超时秒数。超时后返回当前已获取内容。 |
+| `fetch.require_user_intervention` | `boolean` | `false` | 用于需要登录、验证码或人工操作的页面。设为 true 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。鉴权信息会自动保存，再次访问站点无需重新登录。 |
 
 ### 三、`render` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"default" \| "strict" \| "loose" \| "full" \| null` | `null` | 正文提取策略。<br>• `default` / `null`：默认平衡策略。<br>• `strict`：优先保证内容纯度。<br>• `loose`：优先保证内容覆盖。<br>• `full`：尽量保留整页正文文本；当 `output_format="html"` 时返回主体 body HTML。 |
-| `render.include_elements` | `Array<"tables" \| "formatting" \| "images" \| "links" \| "comments">` | `["tables", "formatting"]` | 除正文外需要包含的内容类型。 |
-| `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
-
----
+| `render.output_format` | `"markdown" | "html"` | `"markdown"` | 正文输出格式。 |
+| `render.strategy` | `"default" | "strict" | "loose" | "full" | null` | `null` | 正文提取策略。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。full：尽量保留整页正文文本/主体 HTML。 |
+| `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | 除正文外需要包含的内容类型。可选值：tables、formatting、images、links、comments。 |
+| `render.cursor` | `integer | null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
 
 ### 四、`find` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | 必填 | 要查找的文本或正则表达式。 |
-| `find.regex` | `boolean` | `false` | 是否将 `query` 视为正则表达式处理。 |
-| `find.limit` | `integer \| null` | `null` | 本次最多返回多少个匹配项。留空时使用服务默认上限。 |
-| `find.snippet_max_chars` | `integer \| null` | `null` | 每个匹配项 snippet 的最大长度。留空时使用服务默认长度。 |
+| `find.regex` | `boolean` | `false` | 是否将 query 视为正则表达式处理。 |
+| `find.limit` | `integer | null` | `null` | 本次最多返回多少个匹配项。留空时使用服务默认上限。 |
+| `find.snippet_max_chars` | `integer | null` | `null` | 每个匹配项 snippet 的最大长度。留空时使用服务默认长度。 |
 | `find.start_index` | `integer` | `0` | 从第几个匹配开始返回，0 表示第一个匹配。 |
-
----
 
 ### 五、`sampling` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | 必填 | 指导 LLM 从页面正文中提取信息的提示词。 |
-
----
+| `sampling.model` | `string | null` | `null` | 偏好使用的模型名称。常见值：claude-3-5-haiku、gpt-4o-mini、gemini-2.0-flash。留空则让客户端自动选择。 |
 
 ### 六、`eval` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `eval.script` | `string` | 必填 | 在页面上下文执行的 JavaScript 代码。仅 `dynamic` 模式支持。 |
-
----
+| `eval.script` | `string` | 必填 | 在页面上下文执行的 JavaScript 代码。仅 dynamic 模式支持。 |
 
 ### 七、使用约束
 
@@ -125,7 +116,6 @@
 | `render.cursor` 作用域 | 仅对 `view`、`find` 有效。用于从上次返回的 `next_cursor` 位置继续读取或搜索。 |
 | 续读一致性 | 使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。 |
 
----
 
 ## 返回值格式
 
@@ -353,39 +343,53 @@ fetch:
 
 ### 通用
 
-- `FETCH_TIMEOUT`：抓取总超时秒数，默认 30。
-- `PER_SITE_RATE_LIMIT_SECONDS`：同一 hostname 的最小抓取间隔秒数，默认 `1.0`；设为 `0` 可关闭。串行时会附带一个很小的随机 jitter，避免请求节奏过于固定。
-- `DEFAULT_MAX_LENGTH`：默认返回长度上限。
-- `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。
-- `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。
-- `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。
-- `FIND_SNIPPET_MAX_CHARS`：每条搜索命中的片段长度上限。
-- `SCHEMA_LANGUAGE`：schema 描述语言，支持 `zh` / `en`。
+- `FETCH_TIMEOUT`：抓取总超时秒数。默认 `30`。
+- `PER_SITE_RATE_LIMIT_SECONDS`：同一 hostname 的最小抓取间隔秒数。默认 `1.0`。 设为 `0` 可关闭。串行时会附带一个很小的随机 jitter，避免请求节奏过于固定。
+
+### 自动等待
+
+- `AUTO_WAIT_POLL_INTERVAL`：动态抓取时的稳定性检测轮询间隔（秒）。默认 `0.25`。
+- `AUTO_WAIT_MIN_STABLE_SECONDS`：动态抓取时等待内容稳定的最小时长（秒）。默认 `5.0`。
+- `AUTO_WAIT_MIN_CONTENT_LENGTH`：动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认 `150`。
+- `AUTO_WAIT_SAMPLE_EDGE_CHARS`：稳定性检测时用于对比的首尾字符数。默认 `200`。
+
+### 提取 / LLM
+
+- `DEFAULT_MAX_LENGTH`：默认返回长度上限。默认 `8000`。
+- `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。默认 `true`。
+- `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。默认 `64000`。
+- `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。默认 `12`。
+- `FIND_SNIPPET_MAX_CHARS`：每条搜索命中的片段长度上限。默认 `240`。
+- `SCHEMA_LANGUAGE`：schema 描述语言。默认 `zh`。 支持 `zh` / `en`。
 
 ### 浏览器 / 会话
 
-- `BROWSER_CHANNEL`：传给 Playwright 的浏览器 channel。
-- `BROWSER_SESSION_MODE`：`auth` 或 `profile`，默认 `auth`。
-- `BROWSER_AUTH_STORAGE_STATE`：`auth` 模式下 `storage_state.json` 的路径。
-- `BROWSER_PROFILE_DIR`：`profile` 模式下 persistent profile 的目录。
-- `BROWSER_LOCALE`：浏览器 locale，留空则使用系统默认。
-- `BROWSER_TIMEZONE_ID`：浏览器时区，留空则使用系统默认。
-- `BROWSER_COLOR_SCHEME`：颜色方案，默认 `light`。
-- `BROWSER_VIEWPORT_WIDTH`：viewport 宽度。
-- `BROWSER_VIEWPORT_HEIGHT`：viewport 高度。
-- `ENABLE_AUTH_STEALTH`：是否在 `auth` 模式启用 stealth，默认 `true`。
-- `INTERVENTION_TIMEOUT_SECONDS`：用户人工介入等待超时秒数。
+- `BROWSER_CHANNEL`：传给 Playwright 的浏览器 channel。默认 `chrome`。 可选值包括 `chrome`、`chrome-beta`、`chrome-dev`、`msedge`、`msedge-beta`、`msedge-dev`、`chromium`。
+- `BROWSER_SESSION_MODE`：浏览器会话模式。默认 `auth`。 可选 `auth` 或 `profile`，默认推荐 `auth`。
+- `BROWSER_AUTH_STORAGE_STATE`：`auth` 模式下 `storage_state.json` 的路径。默认 `~/.advanced-fetch-auth/storage_state.json`。
+- `BROWSER_PROFILE_DIR`：`profile` 模式下 persistent profile 的目录。默认 `~/.advanced-fetch-profile`。
+- `BROWSER_LOCALE`：浏览器 locale。默认 空字符串。 留空则使用系统默认。
+- `BROWSER_TIMEZONE_ID`：浏览器时区。默认 空字符串。 留空则使用系统默认。
+- `BROWSER_COLOR_SCHEME`：颜色方案。默认 `light`。
+- `BROWSER_VIEWPORT_WIDTH`：viewport 宽度。默认 `1366`。
+- `BROWSER_VIEWPORT_HEIGHT`：viewport 高度。默认 `768`。
+- `ENABLE_AUTH_STEALTH`：是否在 `auth` 模式启用 stealth。默认 `true`。
+- `INTERVENTION_TIMEOUT_SECONDS`：用户人工介入等待超时秒数。默认 `600`。
 
 ### 代理
 
-- `ENABLE_PROXY`：是否启用代理，默认 `true`。
-- `HTTP_PROXY` / `HTTPS_PROXY`：代理地址。
-- `NO_PROXY`：Playwright 代理绕过列表。
+- `ENABLE_PROXY`：是否启用代理。默认 `true`。
+- `HTTP_PROXY`：HTTP 代理地址。默认 空字符串。
+- `HTTPS_PROXY`：HTTPS 代理地址。默认 空字符串。
+- `NO_PROXY`：代理绕过列表。默认 空字符串。
+
+### Env 加载
+
+- `ADVANCED_FETCH_ENV_FILE`：显式指定 dotenv 文件路径。默认 空字符串。
 
 ### 其它
 
-- `ADVANCED_FETCH_ENV_FILE`：显式指定 dotenv 文件。
-- `IGNORE_SSL_ERRORS=true`：忽略 HTTPS / SSL 证书错误。
+- `IGNORE_SSL_ERRORS`：是否忽略 HTTPS / SSL 证书错误。默认 `false`。
 
 ## 本地安装
 

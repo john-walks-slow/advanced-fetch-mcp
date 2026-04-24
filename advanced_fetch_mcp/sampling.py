@@ -14,22 +14,17 @@ async def run_prompt_extraction(
     source_text: str,
     prompt: str,
     model: Optional[str] = None,
-    speed_priority: float = 0.8,
-    intelligence_priority: float = 0.5,
 ) -> Dict[str, Any]:
     text = source_text[:PROMPT_INPUT_MAX_CHARS]
     if ctx is None:
         raise RuntimeError("prompt 功能需要可用的 MCP 上下文。")
 
     model_preferences = None
-    if model is not None or speed_priority != 0.8 or intelligence_priority != 0.5:
-        hints: list[ModelHint] = []
-        if model:
-            hints.append(ModelHint(name=model))
+    if model is not None:
         model_preferences = ModelPreferences(
-            hints=hints if hints else None,
-            speedPriority=speed_priority,
-            intelligencePriority=intelligence_priority,
+            hints=[ModelHint(name=model)],
+            speedPriority=0.8,
+            intelligencePriority=0.5,
         )
 
     response = await ctx.sample(

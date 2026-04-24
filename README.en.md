@@ -62,47 +62,49 @@ Notes:
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage. |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation type. `view`: get the page main content. `find`: search matches in the main content. `sampling`: use an LLM to extract information from the main content. `eval`: execute JavaScript in the page context and return the result. |
+| `operation` | `"view" | "find" | "sampling" | "eval"` | `"view"` | Operation type. view: get the page main content. find: search matches in the main content. sampling: use an LLM to extract information from the main content. eval: execute JavaScript in the page context and return the result. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
 | `max_length` | `integer` | `8000` | Maximum text length. |
-| `find` | `object \| null` | `null` | Find configuration. Provide only when `operation="find"`. |
-| `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when `operation="sampling"`. |
-| `eval` | `object \| null` | `null` | Script configuration. Provide only when `operation="eval"`. |
+| `find` | `object | null` | `null` | Find configuration. Provide only when operation="find". |
+| `sampling` | `object | null` | `null` | Sampling configuration. Provide only when operation="sampling". |
+| `eval` | `object | null` | `null` | Script configuration. Provide only when operation="eval". |
 
 ### 2. `fetch` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | Fetch mode. `dynamic`: use a browser to load the page and execute scripts. `static`: request the page source directly over HTTP. |
-| `fetch.wait_for` | `number \| "auto"` | `"auto"` | Wait strategy (only effective in dynamic mode). `"auto"`: automatically wait until the network is idle and the main-content area is stable. Number: extra seconds to wait after page load. |
-| `fetch.timeout` | `number \| null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
+| `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | Fetch mode. dynamic: use a browser to load the page and execute scripts. static: request the page source directly over HTTP. |
+| `fetch.min_stable_seconds` | `number | null` | `null` | Minimum stable duration (seconds) for dynamic fetch. Defaults to AUTO_WAIT_MIN_STABLE_SECONDS env var. |
+| `fetch.min_content_length` | `integer | null` | `null` | Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Defaults to AUTO_WAIT_MIN_CONTENT_LENGTH env var. |
+| `fetch.timeout` | `number | null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
 | `fetch.require_user_intervention` | `boolean` | `false` | For pages that require login, CAPTCHA, or manual actions. When set to true, a visible browser window is opened and fetching resumes automatically after the user finishes. |
 
 ### 3. `render` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"default" \| "strict" \| "loose" \| "full" \| null` | `null` | Main-content extraction strategy. `default`/`null`: use the default balanced strategy. `strict`: prioritize content purity. `loose`: prioritize content coverage. `full`: keep as much page text as possible; when `output_format="html"`, return the page body HTML. |
-| `render.include_elements` | `Array<"tables" \| "formatting" \| "images" \| "links" \| "comments">` | `["tables", "formatting"]` | Content types to include in addition to the main content. |
-| `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
+| `render.output_format` | `"markdown" | "html"` | `"markdown"` | Main-content output format. |
+| `render.strategy` | `"default" | "strict" | "loose" | "full" | null` | `null` | Main-content extraction strategy. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. full: keep as much page text/body HTML as possible. |
+| `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | Content types to include in addition to the main content. Allowed values: tables, formatting, images, links, comments. |
+| `render.cursor` | `integer | null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 
 ### 4. `find` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
-| `find.regex` | `boolean` | `false` | Whether to treat `query` as a regular expression. |
-| `find.limit` | `integer \| null` | `null` | Maximum number of matches to return for this request. Uses the server default limit when omitted. |
-| `find.snippet_max_chars` | `integer \| null` | `null` | Maximum snippet length for each returned match. Uses the server default length when omitted. |
-| `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. `0` means the first match. |
+| `find.regex` | `boolean` | `false` | Whether to treat query as a regular expression. |
+| `find.limit` | `integer | null` | `null` | Maximum number of matches to return for this request. Uses the server default limit when omitted. |
+| `find.snippet_max_chars` | `integer | null` | `null` | Maximum snippet length for each returned match. Uses the server default length when omitted. |
+| `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. 0 means the first match. |
 
 ### 5. `sampling` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | Required | Prompt that guides the LLM to extract information from the page main content. |
+| `sampling.model` | `string | null` | `null` | Preferred model name. Common values: claude-3-5-haiku, gpt-4o-mini, gemini-2.0-flash. Leave empty for client auto-selection. |
 
 ### 6. `eval` object
 
@@ -119,6 +121,7 @@ Notes:
 | `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, truncating the final returned content. |
 | `render.cursor` scope | Only valid for `view` and `find`. Used to continue reading or searching from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
+
 
 ## Response format
 
@@ -346,43 +349,53 @@ Fetched pages are cached by `url + fetch.mode`. The cache is reused later when s
 
 ### General
 
-- `FETCH_TIMEOUT`: total fetch timeout in seconds. Default: `30`.
-- `PER_SITE_RATE_LIMIT_SECONDS`: minimum interval in seconds between requests to the same hostname. Default: `1.0`. Set it to `0` to disable. Serialized requests include a small random jitter to avoid an overly regular access pattern.
-- `NAVIGATION_TIMEOUT`: navigation timeout for `dynamic` mode.
-- `NETWORK_IDLE_TIMEOUT`: `networkidle` timeout for `dynamic` mode.
-- `STATIC_FETCH_TIMEOUT`: request timeout for `static` mode.
-- `AUTO_WAIT_TIMEOUT`: max wait time when `fetch.wait_for=auto`.
-- `DEFAULT_MAX_LENGTH`: default max output length.
-- `ENABLE_PROMPT_EXTRACTION`: whether `sampling` is enabled.
-- `PROMPT_INPUT_MAX_CHARS`: max input size passed to the LLM.
-- `MAX_FIND_MATCHES`: maximum number of page-search matches to return.
-- `FIND_SNIPPET_MAX_CHARS`: max snippet length for each search match.
-- `SCHEMA_LANGUAGE`: schema description language. Supported values: `zh` / `en`.
+- `FETCH_TIMEOUT`: Total fetch timeout in seconds. Default: `30`.
+- `PER_SITE_RATE_LIMIT_SECONDS`: Minimum interval in seconds between requests to the same hostname. Default: `1.0`. Set to `0` to disable it. Serialized requests include a small random jitter to avoid an overly regular access pattern.
+
+### Auto-wait
+
+- `AUTO_WAIT_POLL_INTERVAL`: Polling interval in seconds for dynamic-content stability detection. Default: `0.25`.
+- `AUTO_WAIT_MIN_STABLE_SECONDS`: Minimum stable duration in seconds for dynamic fetch. Default: `5.0`.
+- `AUTO_WAIT_MIN_CONTENT_LENGTH`: Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Default: `150`.
+- `AUTO_WAIT_SAMPLE_EDGE_CHARS`: Number of leading and trailing characters compared during stability detection. Default: `200`.
+
+### Extraction / LLM
+
+- `DEFAULT_MAX_LENGTH`: Default max output length. Default: `8000`.
+- `ENABLE_PROMPT_EXTRACTION`: Whether `sampling` is enabled. Default: `true`.
+- `PROMPT_INPUT_MAX_CHARS`: Max input size passed to the LLM. Default: `64000`.
+- `MAX_FIND_MATCHES`: Maximum number of page-search matches to return. Default: `12`.
+- `FIND_SNIPPET_MAX_CHARS`: Max snippet length for each search match. Default: `240`.
+- `SCHEMA_LANGUAGE`: Schema description language. Default: `zh`. Supported values: `zh` / `en`.
 
 ### Browser / Session
 
-- `BROWSER_CHANNEL`: browser channel passed to Playwright.
-- `BROWSER_SESSION_MODE`: `auth` or `profile`, default is `auth`.
-- `BROWSER_AUTH_STORAGE_STATE`: path to `storage_state.json` in `auth` mode.
-- `BROWSER_PROFILE_DIR`: persistent profile directory in `profile` mode.
-- `BROWSER_LOCALE`: browser locale. Leave empty to use the system default.
-- `BROWSER_TIMEZONE_ID`: browser timezone. Leave empty to use the system default.
-- `BROWSER_COLOR_SCHEME`: color scheme, default is `light`.
-- `BROWSER_VIEWPORT_WIDTH`: viewport width.
-- `BROWSER_VIEWPORT_HEIGHT`: viewport height.
-- `ENABLE_AUTH_STEALTH`: whether to enable stealth in `auth` mode, default is `true`.
-- `INTERVENTION_TIMEOUT_SECONDS`: timeout for manual user intervention.
+- `BROWSER_CHANNEL`: Browser channel passed to Playwright. Default: `chrome`. Allowed values include `chrome`, `chrome-beta`, `chrome-dev`, `msedge`, `msedge-beta`, `msedge-dev`, and `chromium`.
+- `BROWSER_SESSION_MODE`: Browser session mode. Default: `auth`. Use `auth` or `profile`. `auth` is the default and recommended mode.
+- `BROWSER_AUTH_STORAGE_STATE`: Path to `storage_state.json` in `auth` mode. Default: `~/.advanced-fetch-auth/storage_state.json`.
+- `BROWSER_PROFILE_DIR`: Persistent profile directory in `profile` mode. Default: `~/.advanced-fetch-profile`.
+- `BROWSER_LOCALE`: Browser locale. Default: empty string. Leave empty to use the system default.
+- `BROWSER_TIMEZONE_ID`: Browser timezone. Default: empty string. Leave empty to use the system default.
+- `BROWSER_COLOR_SCHEME`: Color scheme. Default: `light`.
+- `BROWSER_VIEWPORT_WIDTH`: Viewport width. Default: `1366`.
+- `BROWSER_VIEWPORT_HEIGHT`: Viewport height. Default: `768`.
+- `ENABLE_AUTH_STEALTH`: Whether to enable stealth in `auth` mode. Default: `true`.
+- `INTERVENTION_TIMEOUT_SECONDS`: Timeout in seconds for manual user intervention. Default: `600`.
 
 ### Proxy
 
-- `ENABLE_PROXY`: whether to enable proxy, default is `true`.
-- `HTTP_PROXY` / `HTTPS_PROXY`: proxy address.
-- `NO_PROXY`: Playwright proxy bypass list.
+- `ENABLE_PROXY`: Whether proxy support is enabled. Default: `true`.
+- `HTTP_PROXY`: HTTP proxy address. Default: empty string.
+- `HTTPS_PROXY`: HTTPS proxy address. Default: empty string.
+- `NO_PROXY`: Proxy bypass list. Default: empty string.
 
-### Others
+### Env loading
 
-- `ADVANCED_FETCH_ENV_FILE`: explicitly specify a dotenv file.
-- `IGNORE_SSL_ERRORS=true`: ignore HTTPS / SSL certificate errors.
+- `ADVANCED_FETCH_ENV_FILE`: Explicitly specify a dotenv file path. Default: empty string.
+
+### Misc
+
+- `IGNORE_SSL_ERRORS`: Whether to ignore HTTPS / SSL certificate errors. Default: `false`.
 
 ## Local Installation
 
