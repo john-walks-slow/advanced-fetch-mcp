@@ -178,6 +178,117 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["matches_truncated"])
         self.assertIn(FIND_MATCHES_WARNING, result["warnings"])
 
+    async def test_find_limit_overrides_default_match_cap(self):
+        html = "<main>" + " ".join(["refund"] * (MAX_FIND_MATCHES + 4)) + "</main>"
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={"query": "refund", "limit": 2},
+            max_length=20,
+        )
+        with (
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html=html, final_url="https://example.com/final"
+                    )
+                ),
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.render_view",
+                return_value=" ".join(["refund"] * (MAX_FIND_MATCHES + 4)),
+            ),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertEqual(len(result["matches"]), 2)
+        self.assertEqual(result["matches_total"], MAX_FIND_MATCHES + 4)
+        self.assertTrue(result["matches_truncated"])
+
+    async def test_find_start_index_skips_earlier_matches(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={"query": "refund", "start_index": 1, "limit": 1},
+            max_length=20,
+        )
+        rendered = "A refund B refund C"
+        with (
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html=f"<main>{rendered}</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertEqual(len(result["matches"]), 1)
+        self.assertEqual(result["matches_total"], 2)
+        self.assertEqual(result["matches"][0]["cursor"], rendered.rfind("refund"))
+        self.assertEqual(result["next_cursor"], rendered.rfind("refund"))
+        self.assertTrue(result["matches_truncated"])
+
+    async def test_find_snippet_max_chars_overrides_default(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={"query": "refund", "snippet_max_chars": 30},
+            max_length=20,
+        )
+        rendered = "prefix words before refund trailing words after"
+        with (
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html=f"<main>{rendered}</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertLessEqual(len(result["matches"][0]["snippet"]), 32)
+
+    async def test_find_start_index_beyond_total_returns_empty_page(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={"query": "refund", "start_index": 5},
+            max_length=20,
+        )
+        with (
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>refund here</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value="refund here"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertTrue(result["found"])
+        self.assertEqual(result["matches_total"], 1)
+        self.assertEqual(result["matches"], [])
+        self.assertTrue(result["matches_truncated"])
+        self.assertNotIn("next_cursor", result)
+
     async def test_view_skips_cache_by_default(self):
         request = AdvancedFetchParams(url="https://example.com")
         with (

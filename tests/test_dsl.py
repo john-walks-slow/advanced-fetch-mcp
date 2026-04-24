@@ -25,9 +25,47 @@ class DSLTests(unittest.TestCase):
         )
         self.assertEqual(request.operation, "find")
         self.assertEqual(request.find.query, "x")
+        self.assertIsNone(request.find.limit)
+        self.assertIsNone(request.find.snippet_max_chars)
+        self.assertEqual(request.find.start_index, 0)
 
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(url="https://example.com", operation="find")
+
+    def test_find_accepts_extended_paging_params(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            find={
+                "query": "x",
+                "limit": 3,
+                "snippet_max_chars": 40,
+                "start_index": 2,
+            },
+        )
+        self.assertEqual(request.find.limit, 3)
+        self.assertEqual(request.find.snippet_max_chars, 40)
+        self.assertEqual(request.find.start_index, 2)
+
+    def test_find_extended_paging_params_validate_ranges(self):
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                operation="find",
+                find={"query": "x", "limit": 0},
+            )
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                operation="find",
+                find={"query": "x", "snippet_max_chars": 0},
+            )
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                operation="find",
+                find={"query": "x", "start_index": -1},
+            )
 
     def test_eval_is_exclusive(self):
         with self.assertRaises(ValidationError):

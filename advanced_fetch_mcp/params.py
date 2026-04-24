@@ -153,6 +153,39 @@ FindRegexParam = Annotated[
         ),
     ),
 ]
+FindLimitParam = Annotated[
+    Optional[int],
+    Field(
+        default=None,
+        ge=1,
+        description=schema_text(
+            "本次最多返回多少个匹配项。留空时使用服务默认上限。",
+            "Maximum number of matches to return for this request. Uses the server default limit when omitted.",
+        ),
+    ),
+]
+FindSnippetMaxCharsParam = Annotated[
+    Optional[int],
+    Field(
+        default=None,
+        ge=1,
+        description=schema_text(
+            "每个匹配项 snippet 的最大长度。留空时使用服务默认长度。",
+            "Maximum snippet length for each returned match. Uses the server default length when omitted.",
+        ),
+    ),
+]
+FindStartIndexParam = Annotated[
+    int,
+    Field(
+        default=0,
+        ge=0,
+        description=schema_text(
+            "从第几个匹配开始返回，0 表示第一个匹配。",
+            "Zero-based match index to start returning from. 0 means the first match.",
+        ),
+    ),
+]
 SamplingPromptParam = Annotated[
     str,
     Field(
@@ -247,6 +280,9 @@ class FindParams(BaseModel):
 
     query: FindQueryParam
     regex: FindRegexParam
+    limit: FindLimitParam
+    snippet_max_chars: FindSnippetMaxCharsParam
+    start_index: FindStartIndexParam
 
 
 class SamplingParams(BaseModel):

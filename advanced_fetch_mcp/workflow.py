@@ -13,9 +13,9 @@ from .fetch import (
 )
 from .params import AdvancedFetchParams
 from .sampling import run_prompt_extraction
-from .settings import MAX_FIND_MATCHES, logger
+from .settings import logger
 
-FIND_MATCHES_WARNING = f"命中数量过多，仅返回前 {MAX_FIND_MATCHES} 个 matches 摘要。"
+FIND_MATCHES_WARNING = "命中数量过多，matches 已按请求参数或服务默认限制截断。"
 CACHE_HIT_WARNING = (
     "本次结果使用了缓存。若需刷新缓存，请发起一次不带 render.cursor 的非 find 请求。"
 )
@@ -169,6 +169,9 @@ async def execute_advanced_fetch(
             request.find.query if request.find else "",
             request.find.regex if request.find else False,
             text_offset,
+            request.find.limit if request.find else None,
+            request.find.snippet_max_chars if request.find else None,
+            request.find.start_index if request.find else 0,
         )
         if find_result["matches_truncated"]:
             warnings.append(FIND_MATCHES_WARNING)

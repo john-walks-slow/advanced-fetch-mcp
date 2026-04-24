@@ -160,12 +160,30 @@ def render_auto_wait_text(html: str) -> str:
 
 
 def _build_match_summary(
-    full_text: str, match: re.Match[str], text_offset: int = 0
+    full_text: str,
+    match: re.Match[str],
+    text_offset: int = 0,
+    snippet_max_chars: int = FIND_SNIPPET_MAX_CHARS,
 ) -> MatchSummary:
     absolute_start = match.start() + text_offset
-    snippet_radius = max(20, FIND_SNIPPET_MAX_CHARS // 2)
-    snippet_start = max(0, absolute_start - snippet_radius)
-    snippet_end = min(len(full_text), match.end() + text_offset + snippet_radius)
+    absolute_end = match.end() + text_offset
+    max_chars = max(1, snippet_max_chars)
+    match_length = max(1, absolute_end - absolute_start)
+    core_length = min(max_chars, match_length)
+    remaining_context = max(0, max_chars - core_length)
+    left_context = remaining_context // 2
+    right_context = remaining_context - left_context
+    snippet_start = max(0, absolute_start - left_context)
+    snippet_end = min(len(full_text), absolute_end + right_context)
+    current_length = snippet_end - snippet_start
+
+    if current_length < max_chars:
+        expand_left = min(snippet_start, max_chars - current_length)
+        snippet_start -= expand_left
+        current_length = snippet_end - snippet_start
+        expand_right = min(len(full_text) - snippet_end, max_chars - current_length)
+        snippet_end += expand_right
+
     snippet = full_text[snippet_start:snippet_end]
     if snippet_start > 0:
         snippet = "…" + snippet
@@ -187,6 +205,9 @@ def search_in_text(
     query: str,
     use_regex: bool,
     text_offset: int = 0,
+    match_limit: int | None = None,
+    snippet_max_chars: int | None = None,
+    start_index: int = 0,
 ) -> Dict[str, Any]:
     if use_regex:
         try:
@@ -210,14 +231,28 @@ def search_in_text(
             "next_cursor": None,
         }
 
-    matches_truncated = matches_total > MAX_FIND_MATCHES
+    effective_start_index = max(0, start_index)
+    effective_limit = MAX_FIND_MATCHES if match_limit is None else max(1, match_limit)
+    effective_snippet_max_chars = (
+        FIND_SNIPPET_MAX_CHARS
+        if snippet_max_chars is None
+        else max(1, snippet_max_chars)
+    )
+    returned_matches = found_matches[
+        effective_start_index : effective_start_index + effective_limit
+    ]
+    matches_truncated = (
+        effective_start_index > 0
+        or effective_start_index + len(returned_matches) < matches_total
+    )
     matches = [
         _build_match_summary(
             full_text=full_text,
             match=match,
             text_offset=search_start,
+            snippet_max_chars=effective_snippet_max_chars,
         )
-        for match in found_matches[:MAX_FIND_MATCHES]
+        for match in returned_matches
     ]
 
     first = matches[0] if matches else None
