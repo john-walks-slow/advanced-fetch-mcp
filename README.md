@@ -12,6 +12,7 @@
 - **人工介入和鉴权**：`fetch.require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
 - **反爬伪装**：包含 Playwright-Stealth，尽可能模仿真实请求，尽量防止被检测成机器人。
 - **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
+- **按站点限流**：支持通过环境变量 `PER_SITE_RATE_LIMIT_SECONDS` 为同一 hostname 的请求设置最小间隔。
 
 ## MCP Client 配置
 
@@ -29,6 +30,7 @@
         "BROWSER_CHANNEL": "chrome",
         "BROWSER_SESSION_MODE": "auth",
         "FETCH_TIMEOUT": "30",
+        "PER_SITE_RATE_LIMIT_SECONDS": "1.0",
         "ENABLE_PROXY": "true",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
@@ -91,6 +93,9 @@
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | 必填 | 要查找的文本或正则表达式。 |
 | `find.regex` | `boolean` | `false` | 是否将 `query` 视为正则表达式处理。 |
+| `find.limit` | `integer \| null` | `null` | 本次最多返回多少个匹配项。留空时使用服务默认上限。 |
+| `find.snippet_max_chars` | `integer \| null` | `null` | 每个匹配项 snippet 的最大长度。留空时使用服务默认长度。 |
+| `find.start_index` | `integer` | `0` | 从第几个匹配开始返回，0 表示第一个匹配。 |
 
 ---
 
@@ -349,6 +354,7 @@ fetch:
 ### 通用
 
 - `FETCH_TIMEOUT`：抓取总超时秒数，默认 30。
+- `PER_SITE_RATE_LIMIT_SECONDS`：同一 hostname 的最小抓取间隔秒数，默认 `1.0`；设为 `0` 可关闭。串行时会附带一个很小的随机 jitter，避免请求节奏过于固定。
 - `DEFAULT_MAX_LENGTH`：默认返回长度上限。
 - `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。
 - `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。

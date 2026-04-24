@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import re
 import time
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
@@ -15,6 +17,7 @@ from .params import FetchMode
 from .extract import render_auto_wait_text
 from .settings import (
     FETCH_TIMEOUT_SECONDS,
+    PER_SITE_RATE_LIMIT_SECONDS,
     USER_AGENT,
     IGNORE_SSL_ERRORS,
     get_requests_proxies,
@@ -49,6 +52,9 @@ class EvalInterventionClosedError(RuntimeError):
 _FETCH_CACHE: dict[tuple[str, FetchMode], Tuple[float, str, str]] = {}
 _FETCH_CACHE_MAX_SIZE = 100
 _FETCH_CACHE_TTL_SECONDS = 300.0
+_SITE_RATE_LIMIT_NEXT_ALLOWED_AT: dict[str, float] = {}
+_SITE_RATE_LIMIT_LOCK = asyncio.Lock()
+_SITE_RATE_LIMIT_MAX_JITTER_SECONDS = 0.15
 _FUNCTION_LIKE_SCRIPT_RE = re.compile(
     r"^\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)"
 )
@@ -74,6 +80,31 @@ def store_cached_fetch(url: str, mode: FetchMode, final_url: str, html: str) -> 
         oldest_key = min(_FETCH_CACHE.keys(), key=lambda k: _FETCH_CACHE[k][0])
         del _FETCH_CACHE[oldest_key]
     _FETCH_CACHE[_cache_key(url, mode)] = (time.time(), final_url, html)
+
+
+async def _wait_for_site_rate_limit(url: str) -> None:
+    if PER_SITE_RATE_LIMIT_SECONDS <= 0:
+        return
+
+    host = (urlparse(url).hostname or "").strip().lower()
+    if not host:
+        return
+
+    while True:
+        async with _SITE_RATE_LIMIT_LOCK:
+            now = time.monotonic()
+            next_allowed_at = _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.get(host, 0.0)
+            wait_seconds = next_allowed_at - now
+            if wait_seconds <= 0:
+                jitter_seconds = random.uniform(
+                    0.0,
+                    min(_SITE_RATE_LIMIT_MAX_JITTER_SECONDS, PER_SITE_RATE_LIMIT_SECONDS * 0.2),
+                )
+                _SITE_RATE_LIMIT_NEXT_ALLOWED_AT[host] = (
+                    now + PER_SITE_RATE_LIMIT_SECONDS + jitter_seconds
+                )
+                return
+        await asyncio.sleep(wait_seconds)
 
 
 def static_fetch(url: str, timeout: Optional[float] = None) -> FetchResult:
@@ -312,6 +343,7 @@ async def fetch_url(
     early_exit_min_length: Optional[int] = None,
     timeout: Optional[float] = None,
 ) -> FetchResult:
+    await _wait_for_site_rate_limit(url)
     if mode == "dynamic" or require_user_intervention:
         return await dynamic_fetch(
             url=url,
@@ -339,6 +371,8 @@ async def evaluate_script_on_page(
     timed_out = False
     timeout_stage: Optional[TimeoutStage] = None
     intervention_ended_by: Optional[str] = None
+
+    await _wait_for_site_rate_limit(url)
 
     async with browser_manager.open_session(
         headless=headless,

@@ -5,6 +5,7 @@ from advanced_fetch_mcp.browser import BrowserManager
 from advanced_fetch_mcp.fetch import (
     FetchResult,
     _FETCH_CACHE,
+    _SITE_RATE_LIMIT_NEXT_ALLOWED_AT,
     _build_page_evaluate_script,
     fetch_url,
     get_cached_fetch,
@@ -15,6 +16,7 @@ from advanced_fetch_mcp.fetch import (
 class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         _FETCH_CACHE.clear()
+        _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.clear()
 
     async def test_fetch_url_forces_dynamic_when_intervention_requested(self):
         with patch(
@@ -32,6 +34,21 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         ) as mock_dynamic:
             result = await fetch_url("https://example.com", "dynamic", True)
         mock_dynamic.assert_awaited_once()
+        self.assertEqual(result.final_url, "u")
+
+    async def test_fetch_url_waits_for_site_rate_limit_before_static_fetch(self):
+        with patch(
+            "advanced_fetch_mcp.fetch._wait_for_site_rate_limit",
+            new=AsyncMock(),
+        ) as mock_wait:
+            with patch(
+                "advanced_fetch_mcp.fetch.static_fetch",
+                return_value=FetchResult(html="x", final_url="u"),
+            ) as mock_static:
+                result = await fetch_url("https://example.com", "static", False)
+
+        mock_wait.assert_awaited_once_with("https://example.com")
+        mock_static.assert_called_once_with("https://example.com", None)
         self.assertEqual(result.final_url, "u")
 
     async def test_open_session_rejects_invalid_session_mode(self):
@@ -205,6 +222,64 @@ class ShouldBypassProxyTests(unittest.TestCase):
             self.assertFalse(should_bypass_proxy("http://localhost/page"))
 
 
+class SiteRateLimitTests(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.clear()
+
+    async def test_waits_between_requests_to_same_host(self):
+        from advanced_fetch_mcp.fetch import _wait_for_site_rate_limit
+
+        with patch("advanced_fetch_mcp.fetch.PER_SITE_RATE_LIMIT_SECONDS", 1.0):
+            with patch("advanced_fetch_mcp.fetch.random.uniform", return_value=0.05):
+                with patch(
+                    "advanced_fetch_mcp.fetch.time.monotonic",
+                    side_effect=[100.0, 100.2, 101.05],
+                ):
+                    with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+                        await _wait_for_site_rate_limit("https://example.com/a")
+                        await _wait_for_site_rate_limit("https://example.com/b")
+
+        mock_sleep.assert_awaited_once()
+        self.assertAlmostEqual(mock_sleep.await_args.args[0], 0.85)
+
+    async def test_different_hosts_do_not_block_each_other(self):
+        from advanced_fetch_mcp.fetch import _wait_for_site_rate_limit
+
+        with patch("advanced_fetch_mcp.fetch.PER_SITE_RATE_LIMIT_SECONDS", 1.0):
+            with patch("advanced_fetch_mcp.fetch.random.uniform", return_value=0.05):
+                with patch(
+                    "advanced_fetch_mcp.fetch.time.monotonic",
+                    side_effect=[200.0, 200.1],
+                ):
+                    with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+                        await _wait_for_site_rate_limit("https://a.example.com")
+                        await _wait_for_site_rate_limit("https://b.example.com")
+
+        mock_sleep.assert_not_awaited()
+
+    async def test_reservation_includes_small_jitter(self):
+        from advanced_fetch_mcp.fetch import _wait_for_site_rate_limit
+
+        with patch("advanced_fetch_mcp.fetch.PER_SITE_RATE_LIMIT_SECONDS", 1.0):
+            with patch("advanced_fetch_mcp.fetch.random.uniform", return_value=0.05):
+                with patch("advanced_fetch_mcp.fetch.time.monotonic", return_value=300.0):
+                    await _wait_for_site_rate_limit("https://example.com")
+
+        self.assertAlmostEqual(
+            _SITE_RATE_LIMIT_NEXT_ALLOWED_AT["example.com"],
+            301.05,
+        )
+
+    async def test_disabled_rate_limit_returns_immediately(self):
+        from advanced_fetch_mcp.fetch import _wait_for_site_rate_limit
+
+        with patch("advanced_fetch_mcp.fetch.PER_SITE_RATE_LIMIT_SECONDS", 0.0):
+            with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+                await _wait_for_site_rate_limit("https://example.com")
+
+        mock_sleep.assert_not_awaited()
+
+
 class TruncateTextMiddleTests(unittest.TestCase):
     def test_no_truncation_when_short(self):
         from advanced_fetch_mcp.workflow import _truncate_text_middle
@@ -239,6 +314,9 @@ class TruncateTextMiddleTests(unittest.TestCase):
 
 
 class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self):
+        _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.clear()
+
     async def test_handles_goto_timeout_gracefully(self):
         from advanced_fetch_mcp.fetch import evaluate_script_on_page
         from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -276,6 +354,45 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.fetch_result.final_url, "https://example.com")
         self.assertTrue(result.fetch_result.timed_out)
         self.assertEqual(result.fetch_result.timeout_stage, "goto")
+
+    async def test_evaluate_script_waits_for_site_rate_limit(self):
+        from advanced_fetch_mcp.fetch import evaluate_script_on_page
+
+        mock_page = MagicMock()
+        mock_page.goto = AsyncMock(return_value=None)
+        mock_page.wait_for_load_state = AsyncMock(return_value=None)
+        mock_page.evaluate = AsyncMock(return_value="result")
+        mock_page.is_closed = MagicMock(return_value=False)
+        mock_page.close = AsyncMock()
+        mock_page.content = AsyncMock(return_value="<html></html>")
+        mock_page.url = "https://example.com/final"
+
+        mock_context = MagicMock()
+        mock_context.add_init_script = AsyncMock()
+        mock_context.new_page = AsyncMock(return_value=mock_page)
+
+        mock_session_cm = AsyncMock()
+        mock_session_cm.__aenter__.return_value = mock_context
+        mock_session_cm.__aexit__.return_value = None
+
+        mock_manager = MagicMock()
+        mock_manager.open_session = MagicMock(return_value=mock_session_cm)
+
+        with patch(
+            "advanced_fetch_mcp.fetch._wait_for_site_rate_limit",
+            new=AsyncMock(),
+        ) as mock_wait:
+            with patch("advanced_fetch_mcp.fetch.browser_manager", mock_manager):
+                with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
+                    result = await evaluate_script_on_page(
+                        url="https://example.com",
+                        require_user_intervention=False,
+                        script="document.title",
+                        timeout=1.0,
+                    )
+
+        mock_wait.assert_awaited_once_with("https://example.com")
+        self.assertEqual(result.value, "result")
 
     async def test_eval_intervention_page_closed_raises_clear_error(self):
         from advanced_fetch_mcp.fetch import (

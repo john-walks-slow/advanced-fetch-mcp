@@ -12,6 +12,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Manual intervention and auth**: `fetch.require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
+- **Per-site rate limiting**: Configure `PER_SITE_RATE_LIMIT_SECONDS` to enforce a minimum interval between requests to the same hostname.
 
 ## MCP Client Configuration
 
@@ -28,8 +29,8 @@ More capable than vanilla fetch, simpler than using Playwright directly.
       "env": {
         "BROWSER_CHANNEL": "chrome",
         "BROWSER_SESSION_MODE": "auth",
-        "DEFAULT_TIMEOUT": "10",
-        "AUTO_WAIT_TIMEOUT": "5",
+        "FETCH_TIMEOUT": "30",
+        "PER_SITE_RATE_LIMIT_SECONDS": "1.0",
         "ENABLE_PROXY": "true",
         "HTTP_PROXY": "",
         "HTTPS_PROXY": "",
@@ -93,6 +94,9 @@ Notes:
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
 | `find.regex` | `boolean` | `false` | Whether to treat `query` as a regular expression. |
+| `find.limit` | `integer \| null` | `null` | Maximum number of matches to return for this request. Uses the server default limit when omitted. |
+| `find.snippet_max_chars` | `integer \| null` | `null` | Maximum snippet length for each returned match. Uses the server default length when omitted. |
+| `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. `0` means the first match. |
 
 ### 5. `sampling` object
 
@@ -342,7 +346,8 @@ Fetched pages are cached by `url + fetch.mode`. The cache is reused later when s
 
 ### General
 
-- `DEFAULT_TIMEOUT`: default timeout in seconds.
+- `FETCH_TIMEOUT`: total fetch timeout in seconds. Default: `30`.
+- `PER_SITE_RATE_LIMIT_SECONDS`: minimum interval in seconds between requests to the same hostname. Default: `1.0`. Set it to `0` to disable. Serialized requests include a small random jitter to avoid an overly regular access pattern.
 - `NAVIGATION_TIMEOUT`: navigation timeout for `dynamic` mode.
 - `NETWORK_IDLE_TIMEOUT`: `networkidle` timeout for `dynamic` mode.
 - `STATIC_FETCH_TIMEOUT`: request timeout for `static` mode.
