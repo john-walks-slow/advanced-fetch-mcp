@@ -36,6 +36,16 @@ class FetchResult:
     intervention_ended_by: Optional[str] = None
 
 
+@dataclass(slots=True)
+class EvalResult:
+    value: Any
+    fetch_result: FetchResult
+
+
+class EvalInterventionClosedError(RuntimeError):
+    pass
+
+
 _FETCH_CACHE: dict[tuple[str, FetchMode], Tuple[float, str, str]] = {}
 _FETCH_CACHE_MAX_SIZE = 100
 _FETCH_CACHE_TTL_SECONDS = 300.0
@@ -320,12 +330,15 @@ async def evaluate_script_on_page(
     min_stable_seconds: Optional[float] = None,
     script: str,
     timeout: Optional[float] = None,
-) -> Any:
+) -> EvalResult:
     total_timeout = timeout if timeout is not None else FETCH_TIMEOUT_SECONDS
     deadline = time.monotonic() + total_timeout
 
     page: Optional[Page] = None
     headless = not require_user_intervention
+    timed_out = False
+    timeout_stage: Optional[TimeoutStage] = None
+    intervention_ended_by: Optional[str] = None
 
     async with browser_manager.open_session(
         headless=headless,
@@ -336,6 +349,7 @@ async def evaluate_script_on_page(
 
             page = await context.new_page()
 
+            goto_completed = False
             remaining = deadline - time.monotonic()
             goto_timeout_ms = max(1000, int(remaining * 0.4 * 1000))
             try:
@@ -344,28 +358,49 @@ async def evaluate_script_on_page(
                     wait_until="domcontentloaded",
                     timeout=goto_timeout_ms,
                 )
+                goto_completed = True
             except PlaywrightTimeoutError:
+                timed_out = True
+                timeout_stage = "goto"
                 logger.warning("[EvalScript] goto 超时，尝试在当前页面执行脚本")
             except Exception as exc:
                 logger.warning("[EvalScript] goto 失败：%s", exc)
 
             remaining = deadline - time.monotonic()
-            if remaining > 0:
+            if goto_completed and remaining > 0:
                 networkidle_timeout_ms = max(500, int(remaining * 0.5 * 1000))
                 try:
                     await page.wait_for_load_state(
                         "networkidle",
                         timeout=networkidle_timeout_ms,
                     )
+                except PlaywrightTimeoutError:
+                    timed_out = True
+                    timeout_stage = "networkidle"
                 except Exception:
                     pass
 
                 await _wait_for_content_stable(page, deadline, min_stable_seconds, None)
 
             if require_user_intervention:
-                await wait_for_intervention_end(page)
+                _, _, intervention_ended_by = await wait_for_intervention_end(page)
+                if intervention_ended_by == "page_closed":
+                    raise EvalInterventionClosedError(
+                        "浏览器页面已关闭，无法继续执行 eval 脚本。"
+                    )
 
-            return await page.evaluate(_build_page_evaluate_script(script))
+            value = await page.evaluate(_build_page_evaluate_script(script))
+            _, final_url = await _capture_current_page(page)
+            return EvalResult(
+                value=value,
+                fetch_result=FetchResult(
+                    html="",
+                    final_url=final_url,
+                    timed_out=timed_out,
+                    timeout_stage=timeout_stage,
+                    intervention_ended_by=intervention_ended_by,
+                ),
+            )
         finally:
             if page and not page.is_closed():
                 try:

@@ -77,6 +77,19 @@ class DSLTests(unittest.TestCase):
         self.assertEqual(view.strategy, "loose")
         self.assertEqual(view.include_elements, ["links", "images"])
 
+    def test_render_strategy_accepts_explicit_default_and_full(self):
+        default_request = AdvancedFetchParams(
+            url="https://example.com",
+            render={"strategy": "default"},
+        )
+        full_request = AdvancedFetchParams(
+            url="https://example.com",
+            render={"strategy": "full"},
+        )
+
+        self.assertEqual(default_request.render.strategy, "default")
+        self.assertEqual(full_request.render.strategy, "full")
+
     def test_cursor_is_only_valid_for_view_and_find(self):
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(

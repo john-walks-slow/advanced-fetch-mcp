@@ -20,8 +20,43 @@ def _is_empty_html(html: str | None) -> bool:
     return not _normalize_html_input(html).strip()
 
 
+def _normalize_strategy(strategy: str | None) -> str:
+    return "default" if strategy in {None, "default"} else strategy
+
+
+def _extract_body_html(html: str) -> str:
+    try:
+        document = lxml_html.fromstring(html)
+        body = document.find(".//body")
+        target = body if body is not None else document
+        return lxml_html.tostring(target, encoding="unicode", method="html")
+    except Exception:
+        return html
+
+
+def _extract_body_text(html: str) -> str:
+    try:
+        document = lxml_html.fromstring(html)
+        body = document.find(".//body")
+        target = body if body is not None else document
+        chunks = [chunk.strip() for chunk in target.itertext() if chunk and chunk.strip()]
+        return "\n\n".join(chunks)
+    except Exception:
+        return ""
+
+
+def _render_full_view(html: str, output_format: str) -> str:
+    body_html = _extract_body_html(html)
+    if output_format == "html":
+        return body_html
+
+    full_text = _extract_body_text(body_html) or trafilatura.html2txt(body_html) or trafilatura.html2txt(html) or ""
+    return full_text
+
+
 def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
     extras: Set[str] = set(view.include_elements)
+    strategy = _normalize_strategy(view.strategy)
     return {
         "output_format": view.output_format,
         "include_comments": "comments" in extras,
@@ -29,8 +64,8 @@ def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
         "include_images": "images" in extras,
         "include_links": "links" in extras,
         "include_formatting": view.output_format == "markdown" or "formatting" in extras,
-        "favor_precision": view.strategy == "strict",
-        "favor_recall": view.strategy == "loose",
+        "favor_precision": strategy == "strict",
+        "favor_recall": strategy == "loose",
         "deduplicate": True,
     }
 
@@ -40,11 +75,16 @@ def render_view(html: str, view: RenderConfig) -> str:
     if _is_empty_html(html):
         return ""
 
+    strategy = _normalize_strategy(view.strategy)
+
+    if strategy == "full":
+        return _render_full_view(html, view.output_format)
+
     primary_kwargs = _build_trafilatura_kwargs(view)
 
     attempts: list[Dict[str, Any]] = [primary_kwargs]
 
-    if view.strategy == "strict":
+    if strategy == "strict":
         attempts.append(
             {
                 **primary_kwargs,
@@ -53,7 +93,7 @@ def render_view(html: str, view: RenderConfig) -> str:
             }
         )
 
-    if view.strategy != "loose":
+    if strategy != "loose":
         attempts.append(
             {
                 **primary_kwargs,

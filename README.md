@@ -79,7 +79,7 @@
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"strict" \| "loose" \| null` | `null` | 正文提取策略。<br>• `strict`：优先保证内容纯度。<br>• `loose`：优先保证内容覆盖。<br>• `null`：使用默认平衡策略。 |
+| `render.strategy` | `"default" \| "strict" \| "loose" \| "full" \| null` | `null` | 正文提取策略。<br>• `default` / `null`：默认平衡策略。<br>• `strict`：优先保证内容纯度。<br>• `loose`：优先保证内容覆盖。<br>• `full`：尽量保留整页正文文本；当 `output_format="html"` 时返回主体 body HTML。 |
 | `render.include_elements` | `Array<"tables" \| "formatting" \| "images" \| "links" \| "comments">` | `["tables", "formatting"]` | 除正文外需要包含的内容类型。 |
 | `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
 

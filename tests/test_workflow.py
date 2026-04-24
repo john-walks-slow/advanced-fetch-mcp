@@ -231,21 +231,57 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("advanced_fetch_mcp.workflow.get_cached_fetch") as get_cache_mock,
             patch(
-                "advanced_fetch_mcp.workflow.fetch_url",
-                new=AsyncMock(
-                    return_value=FetchResult(
-                        html="<main>x</main>", final_url="https://example.com/final"
-                    )
-                ),
-            ),
-            patch(
                 "advanced_fetch_mcp.workflow.evaluate_script_on_page",
-                new=AsyncMock(return_value=123),
+                new=AsyncMock(
+                    return_value=type(
+                        "EvalResultStub",
+                        (),
+                        {
+                            "value": 123,
+                            "fetch_result": FetchResult(
+                                html="",
+                                final_url="https://example.com/final",
+                            ),
+                        },
+                    )()
+                ),
             ),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         get_cache_mock.assert_not_called()
         self.assertEqual(result["result"], "123")
+
+    async def test_eval_skips_prefetch_and_uses_eval_final_url(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="eval",
+            eval={"script": "document.title"},
+        )
+        with (
+            patch("advanced_fetch_mcp.workflow.fetch_url", new=AsyncMock()) as fetch_mock,
+            patch(
+                "advanced_fetch_mcp.workflow.evaluate_script_on_page",
+                new=AsyncMock(
+                    return_value=type(
+                        "EvalResultStub",
+                        (),
+                        {
+                            "value": "Example",
+                            "fetch_result": FetchResult(
+                                html="",
+                                final_url="https://example.com/eval-final",
+                                intervention_ended_by="user_marked_ready",
+                            ),
+                        },
+                    )()
+                ),
+            ),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+
+        fetch_mock.assert_not_awaited()
+        self.assertEqual(result["final_url"], "https://example.com/eval-final")
+        self.assertEqual(result["intervention_ended_by"], "user_marked_ready")
 
     async def test_intervention_metadata_is_exposed(self):
         request = AdvancedFetchParams(
@@ -277,16 +313,20 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         with (
             patch(
-                "advanced_fetch_mcp.workflow.fetch_url",
-                new=AsyncMock(
-                    return_value=FetchResult(
-                        html="<main>x</main>", final_url="https://example.com/final"
-                    )
-                ),
-            ),
-            patch(
                 "advanced_fetch_mcp.workflow.evaluate_script_on_page",
-                new=AsyncMock(return_value={"title": "Example"}),
+                new=AsyncMock(
+                    return_value=type(
+                        "EvalResultStub",
+                        (),
+                        {
+                            "value": {"title": "Example"},
+                            "fetch_result": FetchResult(
+                                html="",
+                                final_url="https://example.com/final",
+                            ),
+                        },
+                    )()
+                ),
             ),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)

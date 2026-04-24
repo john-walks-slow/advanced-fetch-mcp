@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION, SCHEMA_LANGUAGE
 
 FetchMode = Literal["dynamic", "static"]
-ExtractStrategy = Literal["strict", "loose"] | None
+ExtractStrategy = Literal["default", "strict", "loose", "full"] | None
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["view", "find", "sampling", "eval"]
 SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
@@ -66,7 +66,7 @@ RequireInterventionParam = Annotated[
     Field(
         default=False,
         description=schema_text(
-            "用于需要登录、验证码或人工操作的页面。设为 true 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。",
+            "用于需要登录、验证码或人工操作的页面。设为 true 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。鉴权信息会自动保存，再次访问站点无需重新登录。",
             "For pages that require login, CAPTCHA, or manual actions. When set to true, a visible browser window is opened and fetching resumes automatically after the user finishes.",
         ),
     ),
@@ -97,8 +97,8 @@ StrategyParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "正文提取策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。null：使用默认平衡策略。",
-            "Main-content extraction strategy. strict: prioritize content purity. loose: prioritize content coverage. null: use the default balanced strategy.",
+            "正文提取策略。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。full：尽量保留整页正文文本/主体 HTML。",
+            "Main-content extraction strategy. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. full: keep as much page text/body HTML as possible.",
         ),
     ),
 ]

@@ -57,6 +57,29 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("Title", result)
         self.assertIn("Content", result)
 
+    def test_default_strategy_alias_matches_balanced_behavior(self):
+        html = "<html><body><nav>Nav</nav><main>Main</main></body></html>"
+        implicit_default = render_view(html, RenderConfig(output_format="markdown", strategy=None))
+        explicit_default = render_view(html, RenderConfig(output_format="markdown", strategy="default"))
+        self.assertEqual(explicit_default, implicit_default)
+
+    def test_full_strategy_markdown_keeps_more_page_text(self):
+        html = "<html><head><title>Title</title></head><body><nav>Nav</nav><main>Main</main><footer>Footer</footer></body></html>"
+        view = RenderConfig(output_format="markdown", strategy="full")
+        result = render_view(html, view)
+        self.assertIn("Nav", result)
+        self.assertIn("Main", result)
+        self.assertIn("Footer", result)
+
+    def test_full_strategy_html_returns_body_html(self):
+        html = "<html><head><title>Title</title></head><body><nav>Nav</nav><main>Main</main></body></html>"
+        view = RenderConfig(output_format="html", strategy="full")
+        result = render_view(html, view)
+        self.assertIn("<body", result)
+        self.assertIn("<nav>Nav</nav>", result)
+        self.assertIn("<main>Main</main>", result)
+        self.assertNotIn("<title>", result)
+
     def test_encode_cursor_returns_non_negative(self):
         from advanced_fetch_mcp.extract import encode_cursor
 

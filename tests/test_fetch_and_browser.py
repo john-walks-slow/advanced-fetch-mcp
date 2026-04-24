@@ -272,4 +272,47 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
                     timeout=1.0,
                 )
 
-        self.assertEqual(result, "result")
+        self.assertEqual(result.value, "result")
+        self.assertEqual(result.fetch_result.final_url, "https://example.com")
+        self.assertTrue(result.fetch_result.timed_out)
+        self.assertEqual(result.fetch_result.timeout_stage, "goto")
+
+    async def test_eval_intervention_page_closed_raises_clear_error(self):
+        from advanced_fetch_mcp.fetch import (
+            EvalInterventionClosedError,
+            evaluate_script_on_page,
+        )
+
+        mock_page = MagicMock()
+        mock_page.goto = AsyncMock()
+        mock_page.wait_for_load_state = AsyncMock()
+        mock_page.evaluate = AsyncMock(return_value="result")
+        mock_page.is_closed = MagicMock(return_value=True)
+        mock_page.close = AsyncMock()
+
+        mock_context = MagicMock()
+        mock_context.add_init_script = AsyncMock()
+        mock_context.new_page = AsyncMock(return_value=mock_page)
+
+        mock_session_cm = AsyncMock()
+        mock_session_cm.__aenter__.return_value = mock_context
+        mock_session_cm.__aexit__.return_value = None
+
+        mock_manager = MagicMock()
+        mock_manager.open_session = MagicMock(return_value=mock_session_cm)
+
+        with patch("advanced_fetch_mcp.fetch.browser_manager", mock_manager):
+            with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
+                with patch(
+                    "advanced_fetch_mcp.fetch.wait_for_intervention_end",
+                    new=AsyncMock(return_value=("", "", "page_closed")),
+                ):
+                    with self.assertRaises(EvalInterventionClosedError):
+                        await evaluate_script_on_page(
+                            url="https://example.com",
+                            require_user_intervention=True,
+                            script="document.title",
+                            timeout=1.0,
+                        )
+
+        mock_page.evaluate.assert_not_awaited()

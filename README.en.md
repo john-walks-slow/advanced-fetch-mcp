@@ -83,7 +83,7 @@ Notes:
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"strict" \| "loose" \| null` | `null` | Main-content extraction strategy. `strict`: prioritize content purity. `loose`: prioritize content coverage. `null`: use the default balanced strategy. |
+| `render.strategy` | `"default" \| "strict" \| "loose" \| "full" \| null` | `null` | Main-content extraction strategy. `default`/`null`: use the default balanced strategy. `strict`: prioritize content purity. `loose`: prioritize content coverage. `full`: keep as much page text as possible; when `output_format="html"`, return the page body HTML. |
 | `render.include_elements` | `Array<"tables" \| "formatting" \| "images" \| "links" \| "comments">` | `["tables", "formatting"]` | Content types to include in addition to the main content. |
 | `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 

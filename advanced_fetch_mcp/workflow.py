@@ -116,6 +116,26 @@ async def execute_advanced_fetch(
 ) -> Dict[str, Any]:
     url = request.url
 
+    if request.operation == "eval":
+        eval_result = await evaluate_script_on_page(
+            url=url,
+            require_user_intervention=request.fetch.require_user_intervention,
+            min_stable_seconds=request.fetch.min_stable_seconds,
+            script=request.eval.script if request.eval else "",
+            timeout=request.fetch.timeout,
+        )
+        warnings = _build_warnings(eval_result.fetch_result)
+        result_text, truncated = _truncate_text_middle(
+            _serialize_result_value(eval_result.value),
+            request.max_length,
+        )
+        return _build_public_result(
+            fetch_result=eval_result.fetch_result,
+            result_payload=result_text,
+            warnings=warnings,
+            truncated=truncated,
+        )
+
     can_use_cache = request.can_use_cache
     cached = get_cached_fetch(url, request.fetch.mode) if can_use_cache else None
     cache_hit = cached is not None
@@ -139,26 +159,6 @@ async def execute_advanced_fetch(
     warnings = _build_warnings(fetch_result)
     if cache_hit:
         warnings.append(CACHE_HIT_WARNING)
-
-    if request.operation == "eval":
-        value = await evaluate_script_on_page(
-            url=fetch_result.final_url,
-            require_user_intervention=request.fetch.require_user_intervention,
-            min_stable_seconds=request.fetch.min_stable_seconds,
-            script=request.eval.script if request.eval else "",
-            timeout=request.fetch.timeout,
-        )
-        result_text, truncated = _truncate_text_middle(
-            _serialize_result_value(value),
-            request.max_length,
-        )
-        return _build_public_result(
-            fetch_result=fetch_result,
-            result_payload=result_text,
-            warnings=warnings,
-            truncated=truncated,
-            cache_hit=cache_hit,
-        )
 
     rendered = render_view(fetch_result.html, request.to_render_config())
 
