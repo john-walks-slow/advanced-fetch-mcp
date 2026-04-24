@@ -75,6 +75,7 @@ Notes:
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | Fetch mode. dynamic: use a browser to load the page and execute scripts. static: request the page source directly over HTTP. |
+| `fetch.engine` | `"trafilatura" | "markdownify"` | `"trafilatura"` | Content extraction engine. trafilatura: main-content extraction. markdownify: convert the page body to Markdown while honoring include_elements as much as possible. |
 | `fetch.min_stable_seconds` | `number | null` | `null` | Minimum stable duration (seconds) for dynamic fetch. Defaults to AUTO_WAIT_MIN_STABLE_SECONDS env var. |
 | `fetch.min_content_length` | `integer | null` | `null` | Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Defaults to AUTO_WAIT_MIN_CONTENT_LENGTH env var. |
 | `fetch.timeout` | `number | null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
@@ -85,7 +86,7 @@ Notes:
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `render.output_format` | `"markdown" | "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"default" | "strict" | "loose" | "full" | null` | `null` | Main-content extraction strategy. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. full: keep as much page text/body HTML as possible. |
+| `render.strategy` | `"default" | "strict" | "loose" | null` | `null` | Main-content extraction strategy. Only applies to the trafilatura engine. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. |
 | `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | Content types to include in addition to the main content. Allowed values: tables, formatting, images, links, comments. |
 | `render.cursor` | `integer | null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 

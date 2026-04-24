@@ -63,21 +63,28 @@ class ExtractTests(unittest.TestCase):
         explicit_default = render_view(html, RenderConfig(output_format="markdown", strategy="default"))
         self.assertEqual(explicit_default, implicit_default)
 
-    def test_full_strategy_markdown_keeps_more_page_text(self):
-        html = "<html><head><title>Title</title></head><body><nav>Nav</nav><main>Main</main><footer>Footer</footer></body></html>"
-        view = RenderConfig(output_format="markdown", strategy="full")
-        result = render_view(html, view)
-        self.assertIn("Nav", result)
-        self.assertIn("Main", result)
-        self.assertIn("Footer", result)
+    def test_markdownify_engine_keeps_links_when_enabled(self):
+        html = "<html><body><p><a href='https://example.com'>Link</a></p></body></html>"
+        view = RenderConfig(output_format="markdown", strategy=None, include_elements=["links"])
+        result = render_view(html, view, engine="markdownify")
+        self.assertIn("[Link](https://example.com)", result)
 
-    def test_full_strategy_html_returns_body_html(self):
-        html = "<html><head><title>Title</title></head><body><nav>Nav</nav><main>Main</main></body></html>"
-        view = RenderConfig(output_format="html", strategy="full")
-        result = render_view(html, view)
+    def test_markdownify_engine_strips_links_when_disabled(self):
+        html = "<html><body><p><a href='https://example.com'>Link</a></p></body></html>"
+        view = RenderConfig(output_format="markdown", strategy=None, include_elements=[])
+        result = render_view(html, view, engine="markdownify")
+        self.assertIn("Link", result)
+        self.assertNotIn("https://example.com", result)
+
+    def test_markdownify_engine_html_returns_filtered_body(self):
+        html = "<html><head><title>Title</title></head><body><a href='https://example.com'>Link</a><img src='a.jpg'><main>Main</main></body></html>"
+        view = RenderConfig(output_format="html", strategy=None, include_elements=[])
+        result = render_view(html, view, engine="markdownify")
         self.assertIn("<body", result)
-        self.assertIn("<nav>Nav</nav>", result)
+        self.assertIn("Link", result)
         self.assertIn("<main>Main</main>", result)
+        self.assertNotIn("href=", result)
+        self.assertNotIn("<img", result)
         self.assertNotIn("<title>", result)
 
     def test_encode_cursor_returns_non_negative(self):
@@ -124,3 +131,9 @@ class ExtractTests(unittest.TestCase):
         view = RenderConfig(output_format="markdown", strategy="strict", include_elements=["images", "formatting"])
         result = render_view(html, view)
         self.assertIn("Text", result)
+
+    def test_markdownify_engine_can_keep_images(self):
+        html = "<html><body><img src='photo.jpg' alt='Photo'><p>Text</p></body></html>"
+        view = RenderConfig(output_format="markdown", strategy=None, include_elements=["images"])
+        result = render_view(html, view, engine="markdownify")
+        self.assertIn("![Photo](photo.jpg)", result)

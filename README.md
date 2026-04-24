@@ -69,6 +69,7 @@
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | 抓取方式。dynamic：使用浏览器加载并执行页面脚本。static：直接 HTTP 请求页面源码。 |
+| `fetch.engine` | `"trafilatura" | "markdownify"` | `"trafilatura"` | 正文提取引擎。trafilatura：主内容提取。markdownify：将页面 body 转成 Markdown，并尽量遵从 include_elements 过滤。 |
 | `fetch.min_stable_seconds` | `number | null` | `null` | 动态抓取时等待内容稳定的最小时长（秒）。默认使用环境变量 AUTO_WAIT_MIN_STABLE_SECONDS。 |
 | `fetch.min_content_length` | `integer | null` | `null` | 动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认使用环境变量 AUTO_WAIT_MIN_CONTENT_LENGTH。 |
 | `fetch.timeout` | `number | null` | `null` | 抓取超时秒数。超时后返回当前已获取内容。 |
@@ -79,7 +80,7 @@
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `render.output_format` | `"markdown" | "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"default" | "strict" | "loose" | "full" | null` | `null` | 正文提取策略。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。full：尽量保留整页正文文本/主体 HTML。 |
+| `render.strategy` | `"default" | "strict" | "loose" | null` | `null` | 正文提取策略。仅对 trafilatura 引擎生效。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。 |
 | `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | 除正文外需要包含的内容类型。可选值：tables、formatting、images、links、comments。 |
 | `render.cursor` | `integer | null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
 

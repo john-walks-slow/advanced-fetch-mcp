@@ -5,6 +5,7 @@ from typing import Any, Dict, Set
 
 import trafilatura
 from lxml import html as lxml_html
+from markdownify import markdownify
 
 from .params import RenderConfig
 from .settings import FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES
@@ -34,24 +35,89 @@ def _extract_body_html(html: str) -> str:
         return html
 
 
-def _extract_body_text(html: str) -> str:
+def _extract_body_node(html: str):
     try:
         document = lxml_html.fromstring(html)
         body = document.find(".//body")
-        target = body if body is not None else document
+        return body if body is not None else document
+    except Exception:
+        return None
+
+
+def _extract_body_text(html: str) -> str:
+    try:
+        target = _extract_body_node(html)
+        if target is None:
+            return ""
         chunks = [chunk.strip() for chunk in target.itertext() if chunk and chunk.strip()]
         return "\n\n".join(chunks)
     except Exception:
         return ""
 
 
-def _render_full_view(html: str, output_format: str) -> str:
-    body_html = _extract_body_html(html)
-    if output_format == "html":
-        return body_html
+def _remove_nodes(target, xpath: str) -> None:
+    for node in target.xpath(xpath):
+        try:
+            node.drop_tree()
+        except Exception:
+            parent = node.getparent()
+            if parent is not None:
+                parent.remove(node)
 
-    full_text = _extract_body_text(body_html) or trafilatura.html2txt(body_html) or trafilatura.html2txt(html) or ""
-    return full_text
+
+def _unwrap_nodes(target, xpath: str) -> None:
+    for node in target.xpath(xpath):
+        try:
+            node.drop_tag()
+        except Exception:
+            continue
+
+
+def _filter_markdownify_html(html: str, include_elements: list[str]) -> str:
+    body = _extract_body_node(html)
+    if body is None:
+        return html
+
+    extras = set(include_elements)
+    _remove_nodes(body, ".//script | .//style | .//noscript | .//template")
+
+    if "comments" not in extras:
+        for node in body.xpath(".//comment()"):
+            parent = node.getparent()
+            if parent is not None:
+                parent.remove(node)
+
+    if "images" not in extras:
+        _remove_nodes(body, ".//img | .//picture | .//source | .//svg | .//canvas")
+
+    if "links" not in extras:
+        _unwrap_nodes(body, ".//a")
+
+    if "tables" not in extras:
+        _unwrap_nodes(body, ".//table | .//thead | .//tbody | .//tfoot | .//tr | .//th | .//td | .//caption")
+
+    if "formatting" not in extras:
+        _unwrap_nodes(
+            body,
+            ".//strong | .//b | .//em | .//i | .//u | .//mark | .//small | .//sub | .//sup | .//code | .//kbd | .//var | .//samp | .//del | .//ins | .//pre | .//blockquote | .//h1 | .//h2 | .//h3 | .//h4 | .//h5 | .//h6",
+        )
+
+    return lxml_html.tostring(body, encoding="unicode", method="html")
+
+
+def _render_markdownify_view(html: str, view: RenderConfig) -> str:
+    filtered_html = _filter_markdownify_html(html, view.include_elements)
+    if view.output_format == "html":
+        return filtered_html
+
+    try:
+        return markdownify(
+            filtered_html,
+            heading_style="ATX",
+            bullets="-",
+        ).strip()
+    except Exception:
+        return _extract_body_text(filtered_html) or trafilatura.html2txt(filtered_html) or ""
 
 
 def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
@@ -70,15 +136,15 @@ def _build_trafilatura_kwargs(view: RenderConfig) -> Dict[str, Any]:
     }
 
 
-def render_view(html: str, view: RenderConfig) -> str:
+def render_view(html: str, view: RenderConfig, engine: str = "trafilatura") -> str:
     html = _normalize_html_input(html)
     if _is_empty_html(html):
         return ""
 
-    strategy = _normalize_strategy(view.strategy)
+    if engine == "markdownify":
+        return _render_markdownify_view(html, view)
 
-    if strategy == "full":
-        return _render_full_view(html, view.output_format)
+    strategy = _normalize_strategy(view.strategy)
 
     primary_kwargs = _build_trafilatura_kwargs(view)
 

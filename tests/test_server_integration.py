@@ -43,10 +43,10 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         params = AdvancedFetchParams(
             url="https://example.com",
             operation="view",
-            fetch={"mode": "static", "timeout": 1.5},
+            fetch={"mode": "static", "engine": "markdownify", "timeout": 1.5},
             render={
                 "output_format": "html",
-                "strategy": "loose",
+                "strategy": "default",
                 "include_elements": ["links"],
             },
             max_length=123,
@@ -61,9 +61,10 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         passed_request = exec_mock.await_args.kwargs["request"]
         self.assertEqual(passed_request.url, "https://example.com")
         self.assertEqual(passed_request.fetch.mode, "static")
+        self.assertEqual(passed_request.fetch.engine, "markdownify")
         self.assertEqual(passed_request.fetch.timeout, 1.5)
         self.assertEqual(passed_request.render.output_format, "html")
-        self.assertEqual(passed_request.render.strategy, "loose")
+        self.assertEqual(passed_request.render.strategy, "default")
         self.assertEqual(passed_request.render.include_elements, ["links"])
         self.assertEqual(passed_request.max_length, 123)
 

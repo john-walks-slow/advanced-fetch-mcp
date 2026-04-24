@@ -162,7 +162,7 @@ async def execute_advanced_fetch(
     if cache_hit:
         warnings.append(CACHE_HIT_WARNING)
 
-    rendered = render_view(fetch_result.html, request.to_render_config())
+    rendered = render_view(fetch_result.html, request.to_render_config(), request.fetch.engine)
 
     if request.operation == "find":
         text_offset = request.render.cursor or 0

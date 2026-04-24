@@ -10,4 +10,6 @@ cookies/
 site.yaml
 sites.yaml
 portal.yaml
+
+*.egg-info/
 extraction_presets.yaml

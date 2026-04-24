@@ -12,6 +12,7 @@ class DSLTests(unittest.TestCase):
         request = AdvancedFetchParams(url="https://example.com")
         self.assertEqual(request.operation, "view")
         self.assertEqual(request.fetch.mode, "dynamic")
+        self.assertEqual(request.fetch.engine, "trafilatura")
         self.assertEqual(request.render.output_format, "markdown")
         self.assertIsNone(request.render.strategy)
         self.assertEqual(request.render.include_elements, ["tables", "formatting"])
@@ -104,29 +105,33 @@ class DSLTests(unittest.TestCase):
     def test_render_config_is_derived(self):
         request = AdvancedFetchParams(
             url="https://example.com",
+            fetch={"engine": "markdownify"},
             render={
                 "output_format": "html",
-                "strategy": "loose",
+                "strategy": "default",
                 "include_elements": ["links", "images"],
             },
         )
         view = request.to_render_config()
         self.assertEqual(view.output_format, "html")
-        self.assertEqual(view.strategy, "loose")
+        self.assertEqual(view.strategy, "default")
         self.assertEqual(view.include_elements, ["links", "images"])
 
-    def test_render_strategy_accepts_explicit_default_and_full(self):
+    def test_render_strategy_accepts_explicit_default(self):
         default_request = AdvancedFetchParams(
             url="https://example.com",
             render={"strategy": "default"},
         )
-        full_request = AdvancedFetchParams(
-            url="https://example.com",
-            render={"strategy": "full"},
-        )
 
         self.assertEqual(default_request.render.strategy, "default")
-        self.assertEqual(full_request.render.strategy, "full")
+
+    def test_markdownify_engine_rejects_non_default_strategy(self):
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                fetch={"engine": "markdownify"},
+                render={"strategy": "loose"},
+            )
 
     def test_cursor_is_only_valid_for_view_and_find(self):
         with self.assertRaises(ValidationError):

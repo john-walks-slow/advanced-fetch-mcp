@@ -7,7 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION, SCHEMA_LANGUAGE
 
 FetchMode = Literal["dynamic", "static"]
-ExtractStrategy = Literal["default", "strict", "loose", "full"] | None
+FetchEngine = Literal["trafilatura", "markdownify"]
+ExtractStrategy = Literal["default", "strict", "loose"] | None
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["view", "find", "sampling", "eval"]
 SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
@@ -108,8 +109,18 @@ StrategyParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "正文提取策略。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。full：尽量保留整页正文文本/主体 HTML。",
-            "Main-content extraction strategy. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. full: keep as much page text/body HTML as possible.",
+            "正文提取策略。仅对 trafilatura 引擎生效。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。",
+            "Main-content extraction strategy. Only applies to the trafilatura engine. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage.",
+        ),
+    ),
+]
+FetchEngineParam = Annotated[
+    FetchEngine,
+    Field(
+        default="trafilatura",
+        description=schema_text(
+            "正文提取引擎。trafilatura：主内容提取。markdownify：将页面 body 转成 Markdown，并尽量遵从 include_elements 过滤。",
+            "Content extraction engine. trafilatura: main-content extraction. markdownify: convert the page body to Markdown while honoring include_elements as much as possible.",
         ),
     ),
 ]
@@ -231,6 +242,7 @@ class FetchParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: FetchModeParam
+    engine: FetchEngineParam
     min_stable_seconds: MinStableSecondsParam
     min_content_length: MinContentLengthParam
     timeout: TimeoutParam
@@ -419,6 +431,14 @@ class AdvancedFetchParams(BaseModel):
                 schema_error(
                     "render.cursor 仅对 view 和 find 操作有效。",
                     "render.cursor is only valid for view and find operations.",
+                )
+            )
+
+        if self.fetch.engine == "markdownify" and self.render.strategy not in {None, "default"}:
+            raise ValueError(
+                schema_error(
+                    "fetch.engine=markdownify 时，render.strategy 只能省略或设为 default。",
+                    "When fetch.engine=markdownify, render.strategy must be omitted or set to default.",
                 )
             )
 
