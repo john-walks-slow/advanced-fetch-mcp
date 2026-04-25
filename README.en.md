@@ -62,7 +62,7 @@ Notes:
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage. |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation: content view, search, LLM extraction, or page JS. |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation: view, in-page search, LLM extraction, or JS execution. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
 | `max_length` | `integer` | `8000` | Maximum text length. |
@@ -75,18 +75,18 @@ Notes:
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
-| `fetch.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed. |
-| `fetch.min_stable_seconds` | `number \| null` | `null` | Minimum stable duration in seconds for dynamic fetch. |
-| `fetch.min_content_length` | `integer \| null` | `null` | Minimum content length for early dynamic wait exit. |
-| `fetch.timeout` | `number \| null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
+| `fetch.min_stable_seconds` | `number` | `5.0` | Minimum stable duration in seconds for dynamic fetch. |
+| `fetch.min_content_length` | `integer` | `150` | Minimum content length for early dynamic wait exit. |
+| `fetch.timeout` | `number` | `30.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
 | `fetch.require_user_intervention` | `boolean` | `false` | Use for login, CAPTCHA, or manual page actions. |
 
 ### 3. `render` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `render.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed. |
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"default" \| "strict" \| "loose" \| null` | `null` | trafilatura-only strategy: strict is cleaner; loose keeps more content. |
+| `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura-only strategy: strict is cleaner; loose keeps more content. |
 | `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | Extra content types to keep, such as tables, links, and images. |
 | `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 
@@ -96,8 +96,8 @@ Notes:
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
 | `find.regex` | `boolean` | `false` | Whether to treat query as a regular expression. |
-| `find.limit` | `integer \| null` | `null` | Maximum number of matches to return for this request. |
-| `find.snippet_max_chars` | `integer \| null` | `null` | Maximum snippet length for each returned match. |
+| `find.limit` | `integer` | `12` | Maximum number of matches to return for this request. |
+| `find.snippet_max_chars` | `integer` | `240` | Maximum snippet length for each returned match. |
 | `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. 0 means the first match. |
 
 ### 5. `sampling` object

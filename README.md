@@ -56,7 +56,7 @@
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | 必填 | 目标网页的完整 URL。 |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型：正文、搜索、LLM 提取或页面 JS。 |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取或执行 JS。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `render` | `object` | 见下表 | 正文提取、输出格式及续读配置。 |
 | `max_length` | `integer` | `8000` | 文本最大长度。 |
@@ -69,18 +69,18 @@
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | 抓取方式：dynamic 用浏览器，static 直接请求源码。 |
-| `fetch.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | 提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。 |
-| `fetch.min_stable_seconds` | `number \| null` | `null` | 动态抓取等待内容稳定的最小时长（秒）。 |
-| `fetch.min_content_length` | `integer \| null` | `null` | 动态抓取提前结束等待的最小内容长度。 |
-| `fetch.timeout` | `number \| null` | `null` | 抓取超时秒数。超时后返回当前已获取内容。 |
+| `fetch.min_stable_seconds` | `number` | `5.0` | 动态抓取等待内容稳定的最小时长（秒）。 |
+| `fetch.min_content_length` | `integer` | `150` | 动态抓取提前结束等待的最小内容长度。 |
+| `fetch.timeout` | `number` | `30.0` | 抓取超时秒数。超时后返回当前已获取内容。 |
 | `fetch.require_user_intervention` | `boolean` | `false` | 用于登录、验证码或人工操作。 |
 
 ### 三、`render` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
+| `render.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | 提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。 |
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"default" \| "strict" \| "loose" \| null` | `null` | trafilatura 专用策略：strict 更干净，loose 覆盖更多。 |
+| `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura 专用策略：strict 更干净，loose 覆盖更多。 |
 | `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | 额外保留的内容类型，如 tables、links、images。 |
 | `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
 
@@ -90,8 +90,8 @@
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | 必填 | 要查找的文本或正则表达式。 |
 | `find.regex` | `boolean` | `false` | 是否将 query 视为正则表达式处理。 |
-| `find.limit` | `integer \| null` | `null` | 本次最多返回多少个匹配项。 |
-| `find.snippet_max_chars` | `integer \| null` | `null` | 每个匹配项 snippet 的最大长度。 |
+| `find.limit` | `integer` | `12` | 本次最多返回多少个匹配项。 |
+| `find.snippet_max_chars` | `integer` | `240` | 每个匹配项 snippet 的最大长度。 |
 | `find.start_index` | `integer` | `0` | 从第几个匹配开始返回，0 表示第一个匹配。 |
 
 ### 五、`sampling` 对象

@@ -4,7 +4,14 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from advanced_fetch_mcp.params import AdvancedFetchParams
-from advanced_fetch_mcp.settings import DEFAULT_MAX_LENGTH
+from advanced_fetch_mcp.settings import (
+    AUTO_WAIT_MIN_CONTENT_LENGTH,
+    AUTO_WAIT_MIN_STABLE_SECONDS,
+    DEFAULT_MAX_LENGTH,
+    FETCH_TIMEOUT_SECONDS,
+    FIND_SNIPPET_MAX_CHARS,
+    MAX_FIND_MATCHES,
+)
 
 
 class DSLTests(unittest.TestCase):
@@ -12,9 +19,12 @@ class DSLTests(unittest.TestCase):
         request = AdvancedFetchParams(url="https://example.com")
         self.assertEqual(request.operation, "view")
         self.assertEqual(request.fetch.mode, "dynamic")
-        self.assertEqual(request.fetch.engine, "trafilatura")
+        self.assertEqual(request.fetch.timeout, FETCH_TIMEOUT_SECONDS)
+        self.assertEqual(request.fetch.min_stable_seconds, AUTO_WAIT_MIN_STABLE_SECONDS)
+        self.assertEqual(request.fetch.min_content_length, AUTO_WAIT_MIN_CONTENT_LENGTH)
+        self.assertEqual(request.render.engine, "trafilatura")
         self.assertEqual(request.render.output_format, "markdown")
-        self.assertIsNone(request.render.strategy)
+        self.assertEqual(request.render.strategy, "default")
         self.assertEqual(request.render.include_elements, ["tables", "formatting"])
         self.assertEqual(request.max_length, DEFAULT_MAX_LENGTH)
 
@@ -26,8 +36,8 @@ class DSLTests(unittest.TestCase):
         )
         self.assertEqual(request.operation, "find")
         self.assertEqual(request.find.query, "x")
-        self.assertIsNone(request.find.limit)
-        self.assertIsNone(request.find.snippet_max_chars)
+        self.assertEqual(request.find.limit, MAX_FIND_MATCHES)
+        self.assertEqual(request.find.snippet_max_chars, FIND_SNIPPET_MAX_CHARS)
         self.assertEqual(request.find.start_index, 0)
 
         with self.assertRaises(ValidationError):
@@ -105,8 +115,8 @@ class DSLTests(unittest.TestCase):
     def test_render_config_is_derived(self):
         request = AdvancedFetchParams(
             url="https://example.com",
-            fetch={"engine": "markdownify"},
             render={
+                "engine": "markdownify",
                 "output_format": "html",
                 "strategy": "default",
                 "include_elements": ["links", "images"],
@@ -129,8 +139,7 @@ class DSLTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(
                 url="https://example.com",
-                fetch={"engine": "markdownify"},
-                render={"strategy": "loose"},
+                render={"engine": "markdownify", "strategy": "loose"},
             )
 
     def test_cursor_is_only_valid_for_view_and_find(self):

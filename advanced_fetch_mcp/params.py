@@ -4,11 +4,20 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .settings import DEFAULT_MAX_LENGTH, ENABLE_PROMPT_EXTRACTION, SCHEMA_LANGUAGE
+from .settings import (
+    AUTO_WAIT_MIN_CONTENT_LENGTH,
+    AUTO_WAIT_MIN_STABLE_SECONDS,
+    DEFAULT_MAX_LENGTH,
+    ENABLE_PROMPT_EXTRACTION,
+    FETCH_TIMEOUT_SECONDS,
+    FIND_SNIPPET_MAX_CHARS,
+    MAX_FIND_MATCHES,
+    SCHEMA_LANGUAGE,
+)
 
 FetchMode = Literal["dynamic", "static"]
 FetchEngine = Literal["trafilatura", "markdownify"]
-ExtractStrategy = Literal["default", "strict", "loose"] | None
+ExtractStrategy = Literal["default", "strict", "loose"]
 OutputFormat = Literal["markdown", "html"]
 Operation = Literal["view", "find", "sampling", "eval"]
 SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
@@ -36,8 +45,8 @@ OperationParam = Annotated[
     Field(
         default="view",
         description=schema_text(
-            "操作类型：正文、搜索、LLM 提取或页面 JS。",
-            "Operation: content view, search, LLM extraction, or page JS.",
+            "操作类型：查看、页面内搜索、LLM 提取或执行 JS。",
+            "Operation: view, in-page search, LLM extraction, or JS execution.",
         ),
     ),
 ]
@@ -52,9 +61,9 @@ FetchModeParam = Annotated[
     ),
 ]
 TimeoutParam = Annotated[
-    Optional[float],
+    float,
     Field(
-        default=None,
+        default=FETCH_TIMEOUT_SECONDS,
         ge=0.1,
         description=schema_text(
             "抓取超时秒数。超时后返回当前已获取内容。",
@@ -73,9 +82,9 @@ RequireInterventionParam = Annotated[
     ),
 ]
 MinStableSecondsParam = Annotated[
-    Optional[float],
+    float,
     Field(
-        default=None,
+        default=AUTO_WAIT_MIN_STABLE_SECONDS,
         ge=0.1,
         description=schema_text(
             "动态抓取等待内容稳定的最小时长（秒）。",
@@ -84,9 +93,9 @@ MinStableSecondsParam = Annotated[
     ),
 ]
 MinContentLengthParam = Annotated[
-    Optional[int],
+    int,
     Field(
-        default=None,
+        default=AUTO_WAIT_MIN_CONTENT_LENGTH,
         ge=1,
         description=schema_text(
             "动态抓取提前结束等待的最小内容长度。",
@@ -107,7 +116,7 @@ OutputFormatParam = Annotated[
 StrategyParam = Annotated[
     ExtractStrategy,
     Field(
-        default=None,
+        default="default",
         description=schema_text(
             "trafilatura 专用策略：strict 更干净，loose 覆盖更多。",
             "trafilatura-only strategy: strict is cleaner; loose keeps more content.",
@@ -176,9 +185,9 @@ FindRegexParam = Annotated[
     ),
 ]
 FindLimitParam = Annotated[
-    Optional[int],
+    int,
     Field(
-        default=None,
+        default=MAX_FIND_MATCHES,
         ge=1,
         description=schema_text(
             "本次最多返回多少个匹配项。",
@@ -187,9 +196,9 @@ FindLimitParam = Annotated[
     ),
 ]
 FindSnippetMaxCharsParam = Annotated[
-    Optional[int],
+    int,
     Field(
-        default=None,
+        default=FIND_SNIPPET_MAX_CHARS,
         ge=1,
         description=schema_text(
             "每个匹配项 snippet 的最大长度。",
@@ -242,7 +251,6 @@ class FetchParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: FetchModeParam
-    engine: FetchEngineParam
     min_stable_seconds: MinStableSecondsParam
     min_content_length: MinContentLengthParam
     timeout: TimeoutParam
@@ -252,6 +260,7 @@ class FetchParams(BaseModel):
 class RenderParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    engine: FetchEngineParam
     output_format: OutputFormatParam
     strategy: StrategyParam
     include_elements: IncludeElementsParam
@@ -434,11 +443,11 @@ class AdvancedFetchParams(BaseModel):
                 )
             )
 
-        if self.fetch.engine == "markdownify" and self.render.strategy not in {None, "default"}:
+        if self.render.engine == "markdownify" and self.render.strategy != "default":
             raise ValueError(
                 schema_error(
-                    "fetch.engine=markdownify 时，render.strategy 只能省略或设为 default。",
-                    "When fetch.engine=markdownify, render.strategy must be omitted or set to default.",
+                    "render.engine=markdownify 时，render.strategy 只能为 default。",
+                    "When render.engine=markdownify, render.strategy must be default.",
                 )
             )
 
