@@ -142,13 +142,21 @@ class DSLTests(unittest.TestCase):
                 render={"engine": "markdownify", "strategy": "loose"},
             )
 
-    def test_cursor_is_only_valid_for_view_and_find(self):
+    def test_cursor_is_only_valid_for_view(self):
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(
                 url="https://example.com",
                 operation="sampling",
                 render={"cursor": 5},
                 sampling={"prompt": "提取"},
+            )
+
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                operation="find",
+                render={"cursor": 5},
+                find={"query": "x"},
             )
 
     def test_max_length_is_top_level_and_render_forbids_it(self):

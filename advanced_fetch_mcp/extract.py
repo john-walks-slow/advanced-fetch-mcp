@@ -228,11 +228,10 @@ def render_auto_wait_text(html: str) -> str:
 def _build_match_summary(
     full_text: str,
     match: re.Match[str],
-    text_offset: int = 0,
     snippet_max_chars: int = FIND_SNIPPET_MAX_CHARS,
 ) -> MatchSummary:
-    absolute_start = match.start() + text_offset
-    absolute_end = match.end() + text_offset
+    absolute_start = match.start()
+    absolute_end = match.end()
     max_chars = max(1, snippet_max_chars)
     match_length = max(1, absolute_end - absolute_start)
     core_length = min(max_chars, match_length)
@@ -270,7 +269,6 @@ def search_in_text(
     full_text: str,
     query: str,
     use_regex: bool,
-    text_offset: int = 0,
     match_limit: int | None = None,
     snippet_max_chars: int | None = None,
     start_index: int = 0,
@@ -283,9 +281,7 @@ def search_in_text(
     else:
         regex = re.compile(re.escape(query), re.IGNORECASE)
 
-    search_start = max(0, text_offset)
-    search_text = full_text[search_start:]
-    found_matches = list(regex.finditer(search_text))
+    found_matches = list(regex.finditer(full_text))
     matches_total = len(found_matches)
     if not found_matches:
         return {
@@ -315,7 +311,6 @@ def search_in_text(
         _build_match_summary(
             full_text=full_text,
             match=match,
-            text_offset=search_start,
             snippet_max_chars=effective_snippet_max_chars,
         )
         for match in returned_matches

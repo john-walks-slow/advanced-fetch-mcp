@@ -15,13 +15,13 @@ class ExtractTests(unittest.TestCase):
 
     def test_render_html_balanced_strategy(self):
         html = "<html><head><script>1</script></head><body><nav>A</nav><main>B</main></body></html>"
-        view = RenderConfig(output_format="html", strategy=None)
+        view = RenderConfig(output_format="html", strategy="default")
         result = render_view(html, view)
         self.assertIn("B", result)
         self.assertNotIn("<script>", result)
 
     def test_search_returns_match_cursor(self):
-        result = search_in_text("a refund b refund c", "refund", False, 0)
+        result = search_in_text("a refund b refund c", "refund", False)
         self.assertEqual(result["matches_total"], 2)
         self.assertIn("cursor", result["matches"][0])
 
@@ -31,7 +31,7 @@ class ExtractTests(unittest.TestCase):
 
     def test_balanced_strategy_keeps_navigation_text(self):
         html = "<html><body><nav>Nav</nav><main>Main</main></body></html>"
-        view = RenderConfig(output_format="markdown", strategy=None)
+        view = RenderConfig(output_format="markdown", strategy="default")
         result = render_view(html, view)
         self.assertIn("Nav", result)
         self.assertIn("Main", result)
@@ -46,7 +46,7 @@ class ExtractTests(unittest.TestCase):
 
     def test_html_output_can_include_images(self):
         html = "<html><body><img src='test.jpg'><p>Text</p></body></html>"
-        view = RenderConfig(output_format="html", strategy=None, include_elements=["images"])
+        view = RenderConfig(output_format="html", strategy="default", include_elements=["images"])
         result = render_view(html, view)
         self.assertIn("Text", result)
 
@@ -59,26 +59,26 @@ class ExtractTests(unittest.TestCase):
 
     def test_default_strategy_alias_matches_balanced_behavior(self):
         html = "<html><body><nav>Nav</nav><main>Main</main></body></html>"
-        implicit_default = render_view(html, RenderConfig(output_format="markdown", strategy=None))
+        implicit_default = render_view(html, RenderConfig(output_format="markdown", strategy="default"))
         explicit_default = render_view(html, RenderConfig(output_format="markdown", strategy="default"))
         self.assertEqual(explicit_default, implicit_default)
 
     def test_markdownify_engine_keeps_links_when_enabled(self):
         html = "<html><body><p><a href='https://example.com'>Link</a></p></body></html>"
-        view = RenderConfig(output_format="markdown", strategy=None, include_elements=["links"])
+        view = RenderConfig(output_format="markdown", strategy="default", include_elements=["links"])
         result = render_view(html, view, engine="markdownify")
         self.assertIn("[Link](https://example.com)", result)
 
     def test_markdownify_engine_strips_links_when_disabled(self):
         html = "<html><body><p><a href='https://example.com'>Link</a></p></body></html>"
-        view = RenderConfig(output_format="markdown", strategy=None, include_elements=[])
+        view = RenderConfig(output_format="markdown", strategy="default", include_elements=[])
         result = render_view(html, view, engine="markdownify")
         self.assertIn("Link", result)
         self.assertNotIn("https://example.com", result)
 
     def test_markdownify_engine_html_returns_filtered_body(self):
         html = "<html><head><title>Title</title></head><body><a href='https://example.com'>Link</a><img src='a.jpg'><main>Main</main></body></html>"
-        view = RenderConfig(output_format="html", strategy=None, include_elements=[])
+        view = RenderConfig(output_format="html", strategy="default", include_elements=[])
         result = render_view(html, view, engine="markdownify")
         self.assertIn("<body", result)
         self.assertIn("Link", result)
@@ -95,12 +95,12 @@ class ExtractTests(unittest.TestCase):
         self.assertEqual(encode_cursor(-5), 0)
 
     def test_search_with_regex_pattern(self):
-        result = search_in_text("abc123def456", "\\d+", True, 0)
+        result = search_in_text("abc123def456", "\\d+", True)
         self.assertEqual(result["matches_total"], 2)
         self.assertTrue(result["found"])
 
     def test_search_with_invalid_regex_falls_back_to_literal(self):
-        result = search_in_text("test [ value", "[", True, 0)
+        result = search_in_text("test [ value", "[", True)
         self.assertTrue(result["found"])
         self.assertIn("[", result["matches"][0]["snippet"])
 
@@ -134,6 +134,6 @@ class ExtractTests(unittest.TestCase):
 
     def test_markdownify_engine_can_keep_images(self):
         html = "<html><body><img src='photo.jpg' alt='Photo'><p>Text</p></body></html>"
-        view = RenderConfig(output_format="markdown", strategy=None, include_elements=["images"])
+        view = RenderConfig(output_format="markdown", strategy="default", include_elements=["images"])
         result = render_view(html, view, engine="markdownify")
         self.assertIn("![Photo](photo.jpg)", result)

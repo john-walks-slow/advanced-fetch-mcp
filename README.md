@@ -59,7 +59,7 @@
 | `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取或执行 JS。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `render` | `object` | 见下表 | 正文提取、输出格式及续读配置。 |
-| `max_length` | `integer` | `8000` | 文本最大长度。 |
+| `max_length` | `integer` | `8000` | 结果最大长度。 |
 | `find` | `object \| null` | `null` | 查找配置。仅当 operation="find" 时提供。 |
 | `sampling` | `object \| null` | `null` | 提取配置。仅当 operation="sampling" 时提供。 |
 | `eval` | `object \| null` | `null` | 脚本配置。仅当 operation="eval" 时提供。 |
@@ -82,7 +82,7 @@
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
 | `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura 专用策略：strict 更干净，loose 覆盖更多。 |
 | `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | 额外保留的内容类型，如 tables、links、images。 |
-| `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
+| `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。仅用于继续读取长页面。 |
 
 ### 四、`find` 对象
 
@@ -113,8 +113,8 @@
 | :--- | :--- |
 | 操作专属配置 | 仅当 `operation` 为对应值时，才可提供 `find`、`sampling` 或 `eval` 对象，且三者互斥。 |
 | `eval` 模式限制 | `operation="eval"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
-| `max_length` 作用域 | 对 `view`、`find`、`sampling`、`eval` 均生效，截断最终返回内容。 |
-| `render.cursor` 作用域 | 仅对 `view`、`find` 有效。用于从上次返回的 `next_cursor` 位置继续读取或搜索。 |
+| `max_length` 作用域 | 对 `view`、`find`、`sampling`、`eval` 均生效，限制最终返回结果。 |
+| `render.cursor` 作用域 | 仅对 `view` 有效。用于从上次返回的 `next_cursor` 位置继续读取。 |
 | 续读一致性 | 使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。 |
 
 

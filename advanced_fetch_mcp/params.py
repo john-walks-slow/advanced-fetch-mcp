@@ -149,8 +149,8 @@ MaxLengthParam = Annotated[
         default=DEFAULT_MAX_LENGTH,
         ge=1,
         description=schema_text(
-            "文本最大长度。",
-            "Maximum text length.",
+            "结果最大长度。",
+            "Maximum result length.",
         ),
     ),
 ]
@@ -160,8 +160,8 @@ CursorParam = Annotated[
         default=None,
         ge=0,
         description=schema_text(
-            "文本起始偏移量。用于继续读取或继续搜索长页面。",
-            "Text start offset used to continue reading or continue searching on long pages.",
+            "文本起始偏移量。仅用于继续读取长页面。",
+            "Text start offset used only to continue reading long pages.",
         ),
     ),
 ]
@@ -435,11 +435,11 @@ class AdvancedFetchParams(BaseModel):
                     )
                 )
 
-        if self.operation not in {"view", "find"} and self.render.cursor is not None:
+        if self.operation != "view" and self.render.cursor is not None:
             raise ValueError(
                 schema_error(
-                    "render.cursor 仅对 view 和 find 操作有效。",
-                    "render.cursor is only valid for view and find operations.",
+                    "render.cursor 仅对 view 操作有效。",
+                    "render.cursor is only valid for view operations.",
                 )
             )
 

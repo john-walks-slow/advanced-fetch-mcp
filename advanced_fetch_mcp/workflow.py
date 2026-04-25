@@ -165,12 +165,10 @@ async def execute_advanced_fetch(
     rendered = render_view(fetch_result.html, request.to_render_config(), request.render.engine)
 
     if request.operation == "find":
-        text_offset = request.render.cursor or 0
         find_result = search_in_text(
             rendered,
             request.find.query if request.find else "",
             request.find.regex if request.find else False,
-            text_offset,
             request.find.limit if request.find else None,
             request.find.snippet_max_chars if request.find else None,
             request.find.start_index if request.find else 0,

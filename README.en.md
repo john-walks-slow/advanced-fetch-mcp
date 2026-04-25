@@ -65,7 +65,7 @@ Notes:
 | `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation: view, in-page search, LLM extraction, or JS execution. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
-| `max_length` | `integer` | `8000` | Maximum text length. |
+| `max_length` | `integer` | `8000` | Maximum result length. |
 | `find` | `object \| null` | `null` | Find configuration. Provide only when operation="find". |
 | `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when operation="sampling". |
 | `eval` | `object \| null` | `null` | Script configuration. Provide only when operation="eval". |
@@ -88,7 +88,7 @@ Notes:
 | `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
 | `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura-only strategy: strict is cleaner; loose keeps more content. |
 | `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | Extra content types to keep, such as tables, links, and images. |
-| `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
+| `render.cursor` | `integer \| null` | `null` | Text start offset used only to continue reading long pages. |
 
 ### 4. `find` object
 
@@ -119,8 +119,8 @@ Notes:
 | :--- | :--- |
 | Operation-specific config | The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive. |
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
-| `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, truncating the final returned content. |
-| `render.cursor` scope | Only valid for `view` and `find`. Used to continue reading or searching from a previous `next_cursor` position. |
+| `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, limiting the final returned result. |
+| `render.cursor` scope | Only valid for `view`. Used to continue reading from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
 
 
