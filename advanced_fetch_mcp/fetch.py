@@ -231,11 +231,14 @@ async def _wait_for_content_stable(
                 
                 stable_duration = now - stable_since
                 if stable_duration >= effective_min_stable:
-                    if early_exit_min_length is not None and len(current_stripped) >= early_exit_min_length:
-                        logger.info("[DynamicFetch] 内容长度达标且稳定，提前退出 (len=%d)", len(current_stripped))
+                    if early_exit_min_length is not None and len(current_stripped) < early_exit_min_length:
+                        pass
                     else:
-                        logger.info("[DynamicFetch] 正文已稳定")
-                    return
+                        if early_exit_min_length is not None:
+                            logger.info("[DynamicFetch] 内容长度达标且稳定 (len=%d)", len(current_stripped))
+                        else:
+                            logger.info("[DynamicFetch] 正文已稳定")
+                        return
             else:
                 stable_since = None
 

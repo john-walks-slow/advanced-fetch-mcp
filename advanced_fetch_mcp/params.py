@@ -98,8 +98,8 @@ MinContentLengthParam = Annotated[
         default=AUTO_WAIT_MIN_CONTENT_LENGTH,
         ge=1,
         description=schema_text(
-            "动态抓取提前结束等待的最小内容长度。",
-            "Minimum content length for early dynamic wait exit.",
+            "动态抓取时内容长度必须达到此值且稳定时间足够才视为成功。",
+            "Dynamic fetch requires content length to reach this value and stable duration to succeed.",
         ),
     ),
 ]
