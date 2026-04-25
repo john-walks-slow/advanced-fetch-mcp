@@ -116,6 +116,7 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         params = AdvancedFetchParams(
             url="https://example.com",
             operation="eval",
+            fetch={"mode": "dynamic"},
             eval={"script": "return document.title;"},
         )
         with patch(

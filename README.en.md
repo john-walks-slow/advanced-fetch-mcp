@@ -55,7 +55,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
+| `fetch.mode` | `"dynamic" \| "static"` | `"static"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
 | `fetch.min_stable_seconds` | `number` | `5.0` | Minimum stable duration in seconds for dynamic fetch. |
 | `fetch.min_content_length` | `integer` | `150` | Dynamic fetch requires content length to reach this value and stable duration to succeed. |
 | `fetch.timeout` | `number` | `30.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |

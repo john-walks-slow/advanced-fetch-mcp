@@ -53,7 +53,7 @@ OperationParam = Annotated[
 FetchModeParam = Annotated[
     FetchMode,
     Field(
-        default="dynamic",
+        default="static",
         description=schema_text(
             "抓取方式：dynamic 用浏览器，static 直接请求源码。",
             "Fetch mode: dynamic uses a browser; static requests source HTML directly.",

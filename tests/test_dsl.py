@@ -18,7 +18,7 @@ class DSLTests(unittest.TestCase):
     def test_defaults(self):
         request = AdvancedFetchParams(url="https://example.com")
         self.assertEqual(request.operation, "view")
-        self.assertEqual(request.fetch.mode, "dynamic")
+        self.assertEqual(request.fetch.mode, "static")
         self.assertEqual(request.fetch.timeout, FETCH_TIMEOUT_SECONDS)
         self.assertEqual(request.fetch.min_stable_seconds, AUTO_WAIT_MIN_STABLE_SECONDS)
         self.assertEqual(request.fetch.min_content_length, AUTO_WAIT_MIN_CONTENT_LENGTH)
@@ -192,9 +192,10 @@ class DSLTests(unittest.TestCase):
         self.assertFalse(request.can_use_cache)
 
     def test_can_use_cache_false_for_sampling_operation(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="sampling",
-            sampling={"prompt": "x"},
-        )
+        with patch("advanced_fetch_mcp.params.ENABLE_PROMPT_EXTRACTION", True):
+            request = AdvancedFetchParams(
+                url="https://example.com",
+                operation="sampling",
+                sampling={"prompt": "x"},
+            )
         self.assertFalse(request.can_use_cache)
