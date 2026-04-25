@@ -29,33 +29,12 @@ More capable than vanilla fetch, simpler than using Playwright directly.
         "advanced-fetch-mcp"
       ],
       "env": {
-        "BROWSER_CHANNEL": "chrome",
-        "BROWSER_SESSION_MODE": "auth",
-        "FETCH_TIMEOUT": "30",
-        "PER_SITE_RATE_LIMIT_SECONDS": "1.0",
-        "ENABLE_PROXY": "true",
-        "HTTP_PROXY": "",
-        "HTTPS_PROXY": "",
-        "NO_PROXY": "",
-        "ENABLE_AUTH_STEALTH": "true",
-        "BROWSER_LOCALE": "",
-        "BROWSER_TIMEZONE_ID": "",
-        "ENABLE_PROMPT_EXTRACTION": "true",
-        "PROMPT_INPUT_MAX_CHARS": "64000",
-        "MAX_FIND_MATCHES": "12",
-        "FIND_SNIPPET_MAX_CHARS": "240",
         "SCHEMA_LANGUAGE": "en"
       }
     }
   }
 }
 ```
-
-Notes:
-
-- Leave `BROWSER_LOCALE` empty to use the system default locale.
-- Leave `BROWSER_TIMEZONE_ID` empty to use the system default timezone.
-- `SCHEMA_LANGUAGE` controls the MCP schema description language. Supported values: `zh` / `en`.
 
 ## Schema
 
