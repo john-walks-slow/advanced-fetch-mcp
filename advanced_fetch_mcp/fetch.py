@@ -27,7 +27,7 @@ from .settings import (
     AUTO_WAIT_SAMPLE_EDGE_CHARS,
 )
 
-TimeoutStage = Literal["goto", "networkidle", "static_request"]
+TimeoutStage = Literal["goto", "static_request"]
 
 
 @dataclass(slots=True)
@@ -295,23 +295,6 @@ async def dynamic_fetch(
                 logger.warning("[DynamicFetch] goto 失败，立即抓取当前内容：%s", exc)
 
             if goto_completed:
-                remaining = deadline - time.monotonic()
-                networkidle_timeout_ms = max(500, int(remaining * 0.5 * 1000))
-                try:
-                    await page.wait_for_load_state(
-                        "networkidle",
-                        timeout=networkidle_timeout_ms,
-                    )
-                except PlaywrightTimeoutError:
-                    timed_out = True
-                    timeout_stage = "networkidle"
-                    logger.warning("[DynamicFetch] networkidle 超时，立即抓取当前内容")
-                except Exception as exc:
-                    logger.warning(
-                        "[DynamicFetch] 等待 networkidle 失败，立即抓取当前内容：%s",
-                        exc,
-                    )
-
                 await _wait_for_content_stable(page, deadline, min_stable_seconds, early_exit_min_length)
 
             if require_user_intervention:
@@ -403,20 +386,7 @@ async def evaluate_script_on_page(
             except Exception as exc:
                 logger.warning("[EvalScript] goto 失败：%s", exc)
 
-            remaining = deadline - time.monotonic()
-            if goto_completed and remaining > 0:
-                networkidle_timeout_ms = max(500, int(remaining * 0.5 * 1000))
-                try:
-                    await page.wait_for_load_state(
-                        "networkidle",
-                        timeout=networkidle_timeout_ms,
-                    )
-                except PlaywrightTimeoutError:
-                    timed_out = True
-                    timeout_stage = "networkidle"
-                except Exception:
-                    pass
-
+            if goto_completed:
                 await _wait_for_content_stable(page, deadline, min_stable_seconds, None)
 
             if require_user_intervention:

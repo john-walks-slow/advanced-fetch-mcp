@@ -64,7 +64,7 @@ class TestRealDynamicFetch:
             timeout=1,
         )
         assert result.timed_out
-        assert result.timeout_stage in ("goto", "networkidle")
+        assert result.timeout_stage == "goto"
 
     async def test_server_redirect_updates_final_url(self):
         """服务端重定向应更新 final_url 到最终页面。"""
@@ -93,42 +93,42 @@ class TestRealDynamicFetch:
 class TestRealEvaluateJs:
     async def test_evaluate_returns_document_title(self):
         """执行 JS 返回 document.title。"""
-        value = await evaluate_script_on_page(
+        result = await evaluate_script_on_page(
             url="https://example.com/",
             require_user_intervention=False,
             script="return document.title;",
             timeout=15,
         )
-        assert value == "Example Domain"
+        assert result.value == "Example Domain"
 
     async def test_evaluate_returns_object(self):
         """执行 JS 返回复杂对象。"""
-        value = await evaluate_script_on_page(
+        result = await evaluate_script_on_page(
             url="https://example.com/",
             require_user_intervention=False,
             script="return { title: document.title, url: location.href };",
             timeout=15,
         )
-        assert isinstance(value, dict)
-        assert value["title"] == "Example Domain"
-        assert "example.com" in value["url"]
+        assert isinstance(result.value, dict)
+        assert result.value["title"] == "Example Domain"
+        assert "example.com" in result.value["url"]
 
     async def test_evaluate_returns_number(self):
         """执行 JS 返回数字。"""
-        value = await evaluate_script_on_page(
+        result = await evaluate_script_on_page(
             url="https://example.com/",
             require_user_intervention=False,
             script="return 42;",
             timeout=15,
         )
-        assert value == 42
+        assert result.value == 42
 
     async def test_evaluate_expression_style(self):
         """表达式风格的 JS 应正常执行。"""
-        value = await evaluate_script_on_page(
+        result = await evaluate_script_on_page(
             url="https://example.com/",
             require_user_intervention=False,
             script="document.querySelectorAll('p').length",
             timeout=15,
         )
-        assert isinstance(value, int)
+        assert isinstance(result.value, int)
