@@ -280,6 +280,98 @@ class SiteRateLimitTests(unittest.IsolatedAsyncioTestCase):
         mock_sleep.assert_not_awaited()
 
 
+class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
+    async def test_returns_when_stable_without_min_length(self):
+        from advanced_fetch_mcp.fetch import _wait_for_content_stable
+
+        mock_page = MagicMock()
+        mock_page.url = "https://example.com"
+        mock_page.content = AsyncMock(return_value="<html><body>short</body></html>")
+
+        call_count = 0
+
+        async def mock_sample(page):
+            nonlocal call_count
+            call_count += 1
+            return "short"
+
+        with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
+            with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()):
+                with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=[0.0, 0.1, 0.2, 0.3, 1.0]):
+                    await _wait_for_content_stable(
+                        mock_page,
+                        deadline=10.0,
+                        min_stable_seconds=0.05,
+                        early_exit_min_length=None,
+                    )
+
+    async def test_waits_when_stable_but_length_not_met(self):
+        from advanced_fetch_mcp.fetch import _wait_for_content_stable
+
+        mock_page = MagicMock()
+        mock_page.url = "https://example.com"
+
+        samples = ["short", "short", "long enough content here"]
+        sample_idx = 0
+
+        async def mock_sample(page):
+            nonlocal sample_idx
+            text = samples[min(sample_idx, len(samples) - 1)]
+            sample_idx += 1
+            return text
+
+        sleep_calls = []
+
+        async def mock_sleep(duration):
+            sleep_calls.append(duration)
+
+        time_values = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+        time_idx = 0
+
+        def mock_time():
+            nonlocal time_idx
+            val = time_values[min(time_idx, len(time_values) - 1)]
+            time_idx += 1
+            return val
+
+        with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
+            with patch("advanced_fetch_mcp.fetch.asyncio.sleep", side_effect=mock_sleep):
+                with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=mock_time):
+                    await _wait_for_content_stable(
+                        mock_page,
+                        deadline=10.0,
+                        min_stable_seconds=0.05,
+                        early_exit_min_length=20,
+                    )
+
+        self.assertGreaterEqual(sample_idx, 3)
+
+    async def test_returns_when_both_stable_and_length_met(self):
+        from advanced_fetch_mcp.fetch import _wait_for_content_stable
+
+        mock_page = MagicMock()
+        mock_page.url = "https://example.com"
+
+        sample_idx = 0
+
+        async def mock_sample(page):
+            nonlocal sample_idx
+            sample_idx += 1
+            return "this is long enough content for the test"
+
+        with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
+            with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()):
+                with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=[0.0, 0.1, 0.2, 0.3, 1.0]):
+                    await _wait_for_content_stable(
+                        mock_page,
+                        deadline=10.0,
+                        min_stable_seconds=0.05,
+                        early_exit_min_length=20,
+                    )
+
+        self.assertEqual(sample_idx, 3)
+
+
 class TruncateTextMiddleTests(unittest.TestCase):
     def test_no_truncation_when_short(self):
         from advanced_fetch_mcp.workflow import _truncate_text_middle

@@ -70,7 +70,7 @@
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | 抓取方式：dynamic 用浏览器，static 直接请求源码。 |
 | `fetch.min_stable_seconds` | `number` | `5.0` | 动态抓取等待内容稳定的最小时长（秒）。 |
-| `fetch.min_content_length` | `integer` | `150` | 动态抓取提前结束等待的最小内容长度。 |
+| `fetch.min_content_length` | `integer` | `150` | 动态抓取时内容长度必须达到此值且稳定时间足够才视为成功。 |
 | `fetch.timeout` | `number` | `30.0` | 抓取超时秒数。超时后返回当前已获取内容。 |
 | `fetch.require_user_intervention` | `boolean` | `false` | 用于登录、验证码或人工操作。 |
 
