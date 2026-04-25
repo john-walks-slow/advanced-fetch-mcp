@@ -1,5 +1,7 @@
 # advanced-fetch-mcp
 
+中文 | [English](README.en.md)
+
 为 Agent 提供易用、强大、节约 Token 的网页抓取能力。
 比 vanilla fetch 强大，比 Playwright 简洁。
 

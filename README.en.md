@@ -1,5 +1,7 @@
 # advanced-fetch-mcp
 
+[中文](README.md) | English
+
 Provides an easy-to-use, powerful, and token-efficient web fetching tool for agents.
 More capable than vanilla fetch, simpler than using Playwright directly.
 
