@@ -62,33 +62,33 @@ Notes:
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage. |
-| `operation` | `"view" | "find" | "sampling" | "eval"` | `"view"` | Operation type. view: get the page main content. find: search matches in the main content. sampling: use an LLM to extract information from the main content. eval: execute JavaScript in the page context and return the result. |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation: content view, search, LLM extraction, or page JS. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
 | `max_length` | `integer` | `8000` | Maximum text length. |
-| `find` | `object | null` | `null` | Find configuration. Provide only when operation="find". |
-| `sampling` | `object | null` | `null` | Sampling configuration. Provide only when operation="sampling". |
-| `eval` | `object | null` | `null` | Script configuration. Provide only when operation="eval". |
+| `find` | `object \| null` | `null` | Find configuration. Provide only when operation="find". |
+| `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when operation="sampling". |
+| `eval` | `object \| null` | `null` | Script configuration. Provide only when operation="eval". |
 
 ### 2. `fetch` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | Fetch mode. dynamic: use a browser to load the page and execute scripts. static: request the page source directly over HTTP. |
-| `fetch.engine` | `"trafilatura" | "markdownify"` | `"trafilatura"` | Content extraction engine. trafilatura: main-content extraction. markdownify: convert the page body to Markdown while honoring include_elements as much as possible. |
-| `fetch.min_stable_seconds` | `number | null` | `null` | Minimum stable duration (seconds) for dynamic fetch. Defaults to AUTO_WAIT_MIN_STABLE_SECONDS env var. |
-| `fetch.min_content_length` | `integer | null` | `null` | Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Defaults to AUTO_WAIT_MIN_CONTENT_LENGTH env var. |
-| `fetch.timeout` | `number | null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
-| `fetch.require_user_intervention` | `boolean` | `false` | For pages that require login, CAPTCHA, or manual actions. When set to true, a visible browser window is opened and fetching resumes automatically after the user finishes. |
+| `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
+| `fetch.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed. |
+| `fetch.min_stable_seconds` | `number \| null` | `null` | Minimum stable duration in seconds for dynamic fetch. |
+| `fetch.min_content_length` | `integer \| null` | `null` | Minimum content length for early dynamic wait exit. |
+| `fetch.timeout` | `number \| null` | `null` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
+| `fetch.require_user_intervention` | `boolean` | `false` | Use for login, CAPTCHA, or manual page actions. |
 
 ### 3. `render` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `render.output_format` | `"markdown" | "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"default" | "strict" | "loose" | null` | `null` | Main-content extraction strategy. Only applies to the trafilatura engine. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage. |
-| `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | Content types to include in addition to the main content. Allowed values: tables, formatting, images, links, comments. |
-| `render.cursor` | `integer | null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
+| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
+| `render.strategy` | `"default" \| "strict" \| "loose" \| null` | `null` | trafilatura-only strategy: strict is cleaner; loose keeps more content. |
+| `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | Extra content types to keep, such as tables, links, and images. |
+| `render.cursor` | `integer \| null` | `null` | Text start offset used to continue reading or continue searching on long pages. |
 
 ### 4. `find` object
 
@@ -96,8 +96,8 @@ Notes:
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
 | `find.regex` | `boolean` | `false` | Whether to treat query as a regular expression. |
-| `find.limit` | `integer | null` | `null` | Maximum number of matches to return for this request. Uses the server default limit when omitted. |
-| `find.snippet_max_chars` | `integer | null` | `null` | Maximum snippet length for each returned match. Uses the server default length when omitted. |
+| `find.limit` | `integer \| null` | `null` | Maximum number of matches to return for this request. |
+| `find.snippet_max_chars` | `integer \| null` | `null` | Maximum snippet length for each returned match. |
 | `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. 0 means the first match. |
 
 ### 5. `sampling` object
@@ -105,7 +105,7 @@ Notes:
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | Required | Prompt that guides the LLM to extract information from the page main content. |
-| `sampling.model` | `string | null` | `null` | Preferred model name. Common values: claude-3-5-haiku, gpt-4o-mini, gemini-2.0-flash. Leave empty for client auto-selection. |
+| `sampling.model` | `string \| null` | `null` | Preferred model name. |
 
 ### 6. `eval` object
 

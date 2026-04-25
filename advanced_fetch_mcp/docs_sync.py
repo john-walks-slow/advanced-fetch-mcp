@@ -201,6 +201,10 @@ def _format_default(schema: dict[str, Any], *, required: bool, lang: str, see_be
     return f"`{json.dumps(value, ensure_ascii=False)}`"
 
 
+def _escape_table_cell(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
+
+
 def _render_table(lines: list[str], header_name: str, properties: dict[str, Any], required: set[str], lang: str, prefix: str = "") -> None:
     labels = SECTION_LABELS[lang]
     lines.extend(
@@ -214,9 +218,11 @@ def _render_table(lines: list[str], header_name: str, properties: dict[str, Any]
         lines.append(
             "| `{path}` | `{type_}` | {default} | {description} |".format(
                 path=path,
-                type_=_format_type(schema),
-                default=_format_default(schema, required=name in required, lang=lang, see_below=prefix == "" and name in {"fetch", "render"}),
-                description=schema["description"],
+                type_=_escape_table_cell(_format_type(schema)),
+                default=_escape_table_cell(
+                    _format_default(schema, required=name in required, lang=lang, see_below=prefix == "" and name in {"fetch", "render"})
+                ),
+                description=_escape_table_cell(schema["description"]),
             )
         )
 

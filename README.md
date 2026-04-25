@@ -56,33 +56,33 @@
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | 必填 | 目标网页的完整 URL。 |
-| `operation` | `"view" | "find" | "sampling" | "eval"` | `"view"` | 操作类型。view：获取页面正文。find：在正文中查找匹配项。sampling：使用 LLM 从正文中提取信息。eval：在页面环境中执行 JavaScript 并返回结果。 |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型：正文、搜索、LLM 提取或页面 JS。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `render` | `object` | 见下表 | 正文提取、输出格式及续读配置。 |
 | `max_length` | `integer` | `8000` | 文本最大长度。 |
-| `find` | `object | null` | `null` | 查找配置。仅当 operation="find" 时提供。 |
-| `sampling` | `object | null` | `null` | 提取配置。仅当 operation="sampling" 时提供。 |
-| `eval` | `object | null` | `null` | 脚本配置。仅当 operation="eval" 时提供。 |
+| `find` | `object \| null` | `null` | 查找配置。仅当 operation="find" 时提供。 |
+| `sampling` | `object \| null` | `null` | 提取配置。仅当 operation="sampling" 时提供。 |
+| `eval` | `object \| null` | `null` | 脚本配置。仅当 operation="eval" 时提供。 |
 
 ### 二、`fetch` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" | "static"` | `"dynamic"` | 抓取方式。dynamic：使用浏览器加载并执行页面脚本。static：直接 HTTP 请求页面源码。 |
-| `fetch.engine` | `"trafilatura" | "markdownify"` | `"trafilatura"` | 正文提取引擎。trafilatura：主内容提取。markdownify：将页面 body 转成 Markdown，并尽量遵从 include_elements 过滤。 |
-| `fetch.min_stable_seconds` | `number | null` | `null` | 动态抓取时等待内容稳定的最小时长（秒）。默认使用环境变量 AUTO_WAIT_MIN_STABLE_SECONDS。 |
-| `fetch.min_content_length` | `integer | null` | `null` | 动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认使用环境变量 AUTO_WAIT_MIN_CONTENT_LENGTH。 |
-| `fetch.timeout` | `number | null` | `null` | 抓取超时秒数。超时后返回当前已获取内容。 |
-| `fetch.require_user_intervention` | `boolean` | `false` | 用于需要登录、验证码或人工操作的页面。设为 true 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。鉴权信息会自动保存，再次访问站点无需重新登录。 |
+| `fetch.mode` | `"dynamic" \| "static"` | `"dynamic"` | 抓取方式：dynamic 用浏览器，static 直接请求源码。 |
+| `fetch.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | 提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。 |
+| `fetch.min_stable_seconds` | `number \| null` | `null` | 动态抓取等待内容稳定的最小时长（秒）。 |
+| `fetch.min_content_length` | `integer \| null` | `null` | 动态抓取提前结束等待的最小内容长度。 |
+| `fetch.timeout` | `number \| null` | `null` | 抓取超时秒数。超时后返回当前已获取内容。 |
+| `fetch.require_user_intervention` | `boolean` | `false` | 用于登录、验证码或人工操作。 |
 
 ### 三、`render` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `render.output_format` | `"markdown" | "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"default" | "strict" | "loose" | null` | `null` | 正文提取策略。仅对 trafilatura 引擎生效。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。 |
-| `render.include_elements` | `Array<"comments" | "tables" | "images" | "links" | "formatting">` | `["tables", "formatting"]` | 除正文外需要包含的内容类型。可选值：tables、formatting、images、links、comments。 |
-| `render.cursor` | `integer | null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
+| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
+| `render.strategy` | `"default" \| "strict" \| "loose" \| null` | `null` | trafilatura 专用策略：strict 更干净，loose 覆盖更多。 |
+| `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | 额外保留的内容类型，如 tables、links、images。 |
+| `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。用于继续读取或继续搜索长页面。 |
 
 ### 四、`find` 对象
 
@@ -90,8 +90,8 @@
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | 必填 | 要查找的文本或正则表达式。 |
 | `find.regex` | `boolean` | `false` | 是否将 query 视为正则表达式处理。 |
-| `find.limit` | `integer | null` | `null` | 本次最多返回多少个匹配项。留空时使用服务默认上限。 |
-| `find.snippet_max_chars` | `integer | null` | `null` | 每个匹配项 snippet 的最大长度。留空时使用服务默认长度。 |
+| `find.limit` | `integer \| null` | `null` | 本次最多返回多少个匹配项。 |
+| `find.snippet_max_chars` | `integer \| null` | `null` | 每个匹配项 snippet 的最大长度。 |
 | `find.start_index` | `integer` | `0` | 从第几个匹配开始返回，0 表示第一个匹配。 |
 
 ### 五、`sampling` 对象
@@ -99,7 +99,7 @@
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | 必填 | 指导 LLM 从页面正文中提取信息的提示词。 |
-| `sampling.model` | `string | null` | `null` | 偏好使用的模型名称。常见值：claude-3-5-haiku、gpt-4o-mini、gemini-2.0-flash。留空则让客户端自动选择。 |
+| `sampling.model` | `string \| null` | `null` | 偏好的模型名。 |
 
 ### 六、`eval` 对象
 

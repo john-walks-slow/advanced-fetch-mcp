@@ -36,8 +36,8 @@ OperationParam = Annotated[
     Field(
         default="view",
         description=schema_text(
-            "操作类型。view：获取页面正文。find：在正文中查找匹配项。sampling：使用 LLM 从正文中提取信息。eval：在页面环境中执行 JavaScript 并返回结果。",
-            "Operation type. view: get the page main content. find: search matches in the main content. sampling: use an LLM to extract information from the main content. eval: execute JavaScript in the page context and return the result.",
+            "操作类型：正文、搜索、LLM 提取或页面 JS。",
+            "Operation: content view, search, LLM extraction, or page JS.",
         ),
     ),
 ]
@@ -46,8 +46,8 @@ FetchModeParam = Annotated[
     Field(
         default="dynamic",
         description=schema_text(
-            "抓取方式。dynamic：使用浏览器加载并执行页面脚本。static：直接 HTTP 请求页面源码。",
-            "Fetch mode. dynamic: use a browser to load the page and execute scripts. static: request the page source directly over HTTP.",
+            "抓取方式：dynamic 用浏览器，static 直接请求源码。",
+            "Fetch mode: dynamic uses a browser; static requests source HTML directly.",
         ),
     ),
 ]
@@ -67,8 +67,8 @@ RequireInterventionParam = Annotated[
     Field(
         default=False,
         description=schema_text(
-            "用于需要登录、验证码或人工操作的页面。设为 true 时将弹出可见浏览器窗口，等待用户操作完成后自动继续抓取。鉴权信息会自动保存，再次访问站点无需重新登录。",
-            "For pages that require login, CAPTCHA, or manual actions. When set to true, a visible browser window is opened and fetching resumes automatically after the user finishes.",
+            "用于登录、验证码或人工操作。",
+            "Use for login, CAPTCHA, or manual page actions.",
         ),
     ),
 ]
@@ -78,8 +78,8 @@ MinStableSecondsParam = Annotated[
         default=None,
         ge=0.1,
         description=schema_text(
-            "动态抓取时等待内容稳定的最小时长（秒）。默认使用环境变量 AUTO_WAIT_MIN_STABLE_SECONDS。",
-            "Minimum stable duration (seconds) for dynamic fetch. Defaults to AUTO_WAIT_MIN_STABLE_SECONDS env var.",
+            "动态抓取等待内容稳定的最小时长（秒）。",
+            "Minimum stable duration in seconds for dynamic fetch.",
         ),
     ),
 ]
@@ -89,8 +89,8 @@ MinContentLengthParam = Annotated[
         default=None,
         ge=1,
         description=schema_text(
-            "动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。默认使用环境变量 AUTO_WAIT_MIN_CONTENT_LENGTH。",
-            "Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Defaults to AUTO_WAIT_MIN_CONTENT_LENGTH env var.",
+            "动态抓取提前结束等待的最小内容长度。",
+            "Minimum content length for early dynamic wait exit.",
         ),
     ),
 ]
@@ -109,8 +109,8 @@ StrategyParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "正文提取策略。仅对 trafilatura 引擎生效。default/null：默认平衡策略。strict：优先保证内容纯度。loose：优先保证内容覆盖。",
-            "Main-content extraction strategy. Only applies to the trafilatura engine. default/null: use the default balanced strategy. strict: prioritize content purity. loose: prioritize content coverage.",
+            "trafilatura 专用策略：strict 更干净，loose 覆盖更多。",
+            "trafilatura-only strategy: strict is cleaner; loose keeps more content.",
         ),
     ),
 ]
@@ -119,8 +119,8 @@ FetchEngineParam = Annotated[
     Field(
         default="trafilatura",
         description=schema_text(
-            "正文提取引擎。trafilatura：主内容提取。markdownify：将页面 body 转成 Markdown，并尽量遵从 include_elements 过滤。",
-            "Content extraction engine. trafilatura: main-content extraction. markdownify: convert the page body to Markdown while honoring include_elements as much as possible.",
+            "提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。",
+            "Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed.",
         ),
     ),
 ]
@@ -129,8 +129,8 @@ IncludeElementsParam = Annotated[
     Field(
         default=["tables", "formatting"],
         description=schema_text(
-            "除正文外需要包含的内容类型。可选值：tables、formatting、images、links、comments。",
-            "Content types to include in addition to the main content. Allowed values: tables, formatting, images, links, comments.",
+            "额外保留的内容类型，如 tables、links、images。",
+            "Extra content types to keep, such as tables, links, and images.",
         ),
     ),
 ]
@@ -181,8 +181,8 @@ FindLimitParam = Annotated[
         default=None,
         ge=1,
         description=schema_text(
-            "本次最多返回多少个匹配项。留空时使用服务默认上限。",
-            "Maximum number of matches to return for this request. Uses the server default limit when omitted.",
+            "本次最多返回多少个匹配项。",
+            "Maximum number of matches to return for this request.",
         ),
     ),
 ]
@@ -192,8 +192,8 @@ FindSnippetMaxCharsParam = Annotated[
         default=None,
         ge=1,
         description=schema_text(
-            "每个匹配项 snippet 的最大长度。留空时使用服务默认长度。",
-            "Maximum snippet length for each returned match. Uses the server default length when omitted.",
+            "每个匹配项 snippet 的最大长度。",
+            "Maximum snippet length for each returned match.",
         ),
     ),
 ]
@@ -222,8 +222,8 @@ SamplingModelParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "偏好使用的模型名称。常见值：claude-3-5-haiku、gpt-4o-mini、gemini-2.0-flash。留空则让客户端自动选择。",
-            "Preferred model name. Common values: claude-3-5-haiku, gpt-4o-mini, gemini-2.0-flash. Leave empty for client auto-selection.",
+            "偏好的模型名。",
+            "Preferred model name.",
         ),
     ),
 ]
