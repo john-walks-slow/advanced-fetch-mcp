@@ -76,8 +76,8 @@ RequireInterventionParam = Annotated[
     Field(
         default=False,
         description=schema_text(
-            "用于登录、验证码或人工操作。",
-            "Use for login, CAPTCHA, or manual page actions.",
+            "用于需要登录、验证码或人工操作的页面。会打开可见浏览器窗口，等待操作完成后自动继续抓取；登录态会保存供后续访问复用。",
+            "Use for pages that require login, CAPTCHA, or manual actions. Opens a visible browser window, resumes after completion, and saves auth state for later visits.",
         ),
     ),
 ]

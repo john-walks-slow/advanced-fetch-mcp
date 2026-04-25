@@ -9,7 +9,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 
 - **Main-content extraction**: Built on top of trafilatura with configurable extraction strategy and scope, removing as much noise as possible to save tokens.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
-- **LLM Sampling**: Use `sampling.prompt` to refine page content and return a condensed result, avoiding raw page content polluting the caller context.
+- **LLM Sampling** (experimental): Use `sampling.prompt` to refine page content and return a condensed result. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 - **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `render.cursor` plus top-level `max_length` to continue reading from any position.
 - **Manual intervention and auth**: `fetch.require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
@@ -59,7 +59,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `fetch.min_stable_seconds` | `number` | `5.0` | Minimum stable duration in seconds for dynamic fetch. |
 | `fetch.min_content_length` | `integer` | `150` | Dynamic fetch requires content length to reach this value and stable duration to succeed. |
 | `fetch.timeout` | `number` | `30.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
-| `fetch.require_user_intervention` | `boolean` | `false` | Use for login, CAPTCHA, or manual page actions. |
+| `fetch.require_user_intervention` | `boolean` | `false` | Use for pages that require login, CAPTCHA, or manual actions. Opens a visible browser window, resumes after completion, and saves auth state for later visits. |
 
 ### 3. `render` object
 
@@ -191,7 +191,9 @@ Notes:
 | `snippet` | `string` | Text snippet around the match. |
 | `cursor` | `integer` | Offset that can be used later as `render.cursor` to continue reading. |
 
-### `sampling` response
+### `sampling` response (experimental)
+
+> Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 
 ```json
 {
@@ -344,7 +346,7 @@ Fetched pages are cached by `url + fetch.mode`. The cache is reused later when s
 ### Extraction / LLM
 
 - `DEFAULT_MAX_LENGTH`: Default max output length. Default: `8000`.
-- `ENABLE_PROMPT_EXTRACTION`: Whether `sampling` is enabled. Default: `true`.
+- `ENABLE_PROMPT_EXTRACTION`: Whether `sampling` is enabled. Default: `false`. Experimental feature. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 - `PROMPT_INPUT_MAX_CHARS`: Max input size passed to the LLM. Default: `64000`.
 - `MAX_FIND_MATCHES`: Maximum number of page-search matches to return. Default: `12`.
 - `FIND_SNIPPET_MAX_CHARS`: Max snippet length for each search match. Default: `240`.

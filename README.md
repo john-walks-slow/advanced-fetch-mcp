@@ -9,7 +9,7 @@
 
 - **正文提取**：基于 trafilatura 的强大正文提取能力，可配置的提取策略和范围，最大程度剔除噪音节省 Token。
 - **支持动态网站**：基于 Playwright 的动态网站抓取能力，智能识别页面稳定状态。
-- **LLM Sampling**：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果，避免原始页面内容污染调用方上下文。
+- **LLM Sampling**（实验性）：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp 等。
 - **大页面分段处理**：支持 `find.query` 在页面中搜索，并结合 `render.cursor` 与顶层 `max_length` 从任意位置续读。
 - **人工介入和鉴权**：`fetch.require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
 - **反爬伪装**：包含 Playwright-Stealth，尽可能模仿真实请求，尽量防止被检测成机器人。
@@ -59,7 +59,7 @@
 | `fetch.min_stable_seconds` | `number` | `5.0` | 动态抓取等待内容稳定的最小时长（秒）。 |
 | `fetch.min_content_length` | `integer` | `150` | 动态抓取时内容长度必须达到此值且稳定时间足够才视为成功。 |
 | `fetch.timeout` | `number` | `30.0` | 抓取超时秒数。超时后返回当前已获取内容。 |
-| `fetch.require_user_intervention` | `boolean` | `false` | 用于登录、验证码或人工操作。 |
+| `fetch.require_user_intervention` | `boolean` | `false` | 用于需要登录、验证码或人工操作的页面。会打开可见浏览器窗口，等待操作完成后自动继续抓取；登录态会保存供后续访问复用。 |
 
 ### 三、`render` 对象
 
@@ -191,7 +191,9 @@
 | `snippet` | `string` | 命中附近的文本摘要。 |
 | `cursor` | `integer` | 可用于后续 `render.cursor` 续读的偏移量。 |
 
-### `sampling` 返回
+### `sampling` 返回（实验性）
+
+> 支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp、Glama、Joey、fast-agent、mcp-use、Postman 等。
 
 ```json
 {
@@ -344,7 +346,7 @@ fetch:
 ### 提取 / LLM
 
 - `DEFAULT_MAX_LENGTH`：默认返回长度上限。默认 `8000`。
-- `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。默认 `true`。
+- `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。默认 `false`。 实验性功能。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp、Glama、Joey、fast-agent、mcp-use、Postman 等。
 - `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。默认 `64000`。
 - `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。默认 `12`。
 - `FIND_SNIPPET_MAX_CHARS`：每条搜索命中的片段长度上限。默认 `240`。
