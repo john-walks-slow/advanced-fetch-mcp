@@ -86,11 +86,10 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
             url="https://example.com",
             operation="view",
             fetch={"mode": "static", "timeout": 1.5},
-            render={
-                "engine": "markdownify",
+            view={
                 "output_format": "html",
-                "strategy": "default",
-                "include_elements": ["links"],
+                "markdown_engine": "full",
+                "render_images": False,
             },
             max_length=123,
         )
@@ -105,10 +104,8 @@ class ServerIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(passed_request.url, "https://example.com")
         self.assertEqual(passed_request.fetch.mode, "static")
         self.assertEqual(passed_request.fetch.timeout, 1.5)
-        self.assertEqual(passed_request.render.engine, "markdownify")
-        self.assertEqual(passed_request.render.output_format, "html")
-        self.assertEqual(passed_request.render.strategy, "default")
-        self.assertEqual(passed_request.render.include_elements, ["links"])
+        self.assertEqual(passed_request.view.output_format, "html")
+        self.assertEqual(passed_request.view.markdown_engine, "full")
         self.assertEqual(passed_request.max_length, 123)
 
     async def test_eval_request_is_valid(self):

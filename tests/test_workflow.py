@@ -6,12 +6,13 @@ from advanced_fetch_mcp.params import AdvancedFetchParams
 from advanced_fetch_mcp.settings import MAX_FIND_MATCHES
 from advanced_fetch_mcp.workflow import FIND_MATCHES_WARNING, execute_advanced_fetch
 
+MOCK_REFID = "a1b2c3d4e5f6"
+
 
 class WorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_default_result_is_markdown_view(self):
         request = AdvancedFetchParams(url="https://example.com")
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -22,20 +23,24 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch("advanced_fetch_mcp.workflow.render_view", return_value="Hello"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch(
+                "advanced_fetch_mcp.workflow.store_cached_fetch",
+                return_value=MOCK_REFID,
+            ),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertIn("Hello", result["result"])
         self.assertNotIn("img", result["result"])
+        self.assertEqual(result["refid"], MOCK_REFID)
 
     async def test_sampling_result_becomes_primary_result(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="sampling",
-            sampling={"prompt": "提取标题"},
-        )
+        with patch("advanced_fetch_mcp.params.ENABLE_PROMPT_EXTRACTION", True):
+            request = AdvancedFetchParams(
+                url="https://example.com",
+                operation="sampling",
+                sampling={"prompt": "提取标题"},
+            )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -44,7 +49,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
             patch(
                 "advanced_fetch_mcp.workflow.run_prompt_extraction",
                 new=AsyncMock(return_value={"value": "标题：Hello"}),
@@ -52,6 +57,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(result["result"], "标题：Hello")
+        self.assertEqual(result["refid"], MOCK_REFID)
 
     async def test_find_returns_minimal_match_summaries(self):
         request = AdvancedFetchParams(
@@ -61,7 +67,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=18,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -71,22 +76,25 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.render_view", return_value="prefix refund suffix more refund tail"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch(
+                "advanced_fetch_mcp.workflow.render_view",
+                return_value="prefix refund suffix more refund tail",
+            ),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertTrue(result["found"])
         self.assertEqual(set(result["matches"][0].keys()), {"snippet", "cursor"})
         self.assertEqual(result["matches_total"], 2)
+        self.assertEqual(result["refid"], MOCK_REFID)
 
-    async def test_cursor_continues_from_render_cursor(self):
+    async def test_cursor_continues_from_view_cursor(self):
         request = AdvancedFetchParams(
             url="https://example.com",
-            render={"cursor": 8},
+            view={"cursor": 8},
             max_length=8,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -96,12 +104,16 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.render_view", return_value="0123456789abcdef"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch(
+                "advanced_fetch_mcp.workflow.render_view",
+                return_value="0123456789abcdef",
+            ),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(result["result"], "89abcdef")
         self.assertNotIn("matches", result)
+        self.assertEqual(result["refid"], MOCK_REFID)
 
     async def test_find_then_cursor_jump_to_match(self):
         initial = AdvancedFetchParams(
@@ -111,8 +123,8 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=12,
         )
         html = "<main>a refund b c refund d e refund f</main>"
+        rendered = "a refund b c refund d e refund f"
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -121,19 +133,18 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.render_view", return_value="a refund b c refund d e refund f"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             first = await execute_advanced_fetch(ctx=object(), request=initial)
 
         third_cursor = first["matches"][2]["cursor"]
         follow = AdvancedFetchParams(
             url="https://example.com",
-            render={"cursor": third_cursor},
+            view={"cursor": third_cursor},
             max_length=12,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -142,8 +153,8 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.render_view", return_value="a refund b c refund d e refund f"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID + "2"),
         ):
             jumped = await execute_advanced_fetch(ctx=object(), request=follow)
 
@@ -158,7 +169,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=20,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -171,12 +181,13 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 "advanced_fetch_mcp.workflow.render_view",
                 return_value=" ".join(["refund"] * (MAX_FIND_MATCHES + 4)),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(len(result["matches"]), MAX_FIND_MATCHES)
         self.assertTrue(result["matches_truncated"])
         self.assertIn(FIND_MATCHES_WARNING, result["warnings"])
+        self.assertEqual(result["refid"], MOCK_REFID)
 
     async def test_find_limit_overrides_default_match_cap(self):
         html = "<main>" + " ".join(["refund"] * (MAX_FIND_MATCHES + 4)) + "</main>"
@@ -187,7 +198,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=20,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -200,12 +210,13 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 "advanced_fetch_mcp.workflow.render_view",
                 return_value=" ".join(["refund"] * (MAX_FIND_MATCHES + 4)),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(len(result["matches"]), 2)
         self.assertEqual(result["matches_total"], MAX_FIND_MATCHES + 4)
         self.assertTrue(result["matches_truncated"])
+        self.assertTrue(result["found"])
 
     async def test_find_start_index_skips_earlier_matches(self):
         request = AdvancedFetchParams(
@@ -216,7 +227,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         rendered = "A refund B refund C"
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -227,7 +237,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(len(result["matches"]), 1)
@@ -235,31 +245,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["matches"][0]["cursor"], rendered.rfind("refund"))
         self.assertEqual(result["next_cursor"], rendered.rfind("refund"))
         self.assertTrue(result["matches_truncated"])
-
-    async def test_find_snippet_max_chars_overrides_default(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="find",
-            find={"query": "refund", "snippet_max_chars": 30},
-            max_length=20,
-        )
-        rendered = "prefix words before refund trailing words after"
-        with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
-            patch(
-                "advanced_fetch_mcp.workflow.fetch_url",
-                new=AsyncMock(
-                    return_value=FetchResult(
-                        html=f"<main>{rendered}</main>",
-                        final_url="https://example.com/final",
-                    )
-                ),
-            ),
-            patch("advanced_fetch_mcp.workflow.render_view", return_value=rendered),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
-        ):
-            result = await execute_advanced_fetch(ctx=object(), request=request)
-        self.assertLessEqual(len(result["matches"][0]["snippet"]), 32)
+        self.assertEqual(result["refid"], MOCK_REFID)
 
     async def test_find_start_index_beyond_total_returns_empty_page(self):
         request = AdvancedFetchParams(
@@ -269,7 +255,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=20,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -280,7 +265,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch("advanced_fetch_mcp.workflow.render_view", return_value="refund here"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertTrue(result["found"])
@@ -289,10 +274,12 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["matches_truncated"])
         self.assertNotIn("next_cursor", result)
 
-    async def test_view_skips_cache_by_default(self):
+    async def test_view_does_not_implicitly_cache(self):
         request = AdvancedFetchParams(url="https://example.com")
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch") as get_cache_mock,
+            patch(
+                "advanced_fetch_mcp.workflow.get_cached_fetch_by_refid",
+            ) as get_cache_mock,
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -301,46 +288,70 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ) as fetch_mock,
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch") as store_cache_mock,
+            patch(
+                "advanced_fetch_mcp.workflow.store_cached_fetch",
+                return_value=MOCK_REFID,
+            ) as store_cache_mock,
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         get_cache_mock.assert_not_called()
         fetch_mock.assert_awaited_once()
         store_cache_mock.assert_called_once_with(
             "https://example.com",
-            "dynamic",
+            "static",
             "https://fresh",
             "<main>new</main>",
         )
         self.assertEqual(result["final_url"], "https://fresh")
+        self.assertIn("refid", result)
 
-    async def test_find_prefers_cached_html(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="find",
-            find={"query": "cached"},
-        )
+    async def test_refid_uses_cached_html(self):
+        refid_url = MOCK_REFID
+        request = AdvancedFetchParams(url=refid_url)
         with (
             patch(
-                "advanced_fetch_mcp.workflow.get_cached_fetch",
-                return_value=("https://cached", "<main>cached value</main>"),
+                "advanced_fetch_mcp.workflow._is_refid",
+                return_value=True,
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.get_cached_fetch_by_refid",
+                return_value=("https://cached-url", "<main>cached value</main>"),
             ) as get_cache_mock,
             patch("advanced_fetch_mcp.workflow.fetch_url", new=AsyncMock()) as fetch_mock,
+            patch("advanced_fetch_mcp.workflow.render_view", return_value="cached value"),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
-        get_cache_mock.assert_called_once_with("https://example.com", "dynamic")
+        get_cache_mock.assert_called_once_with(MOCK_REFID)
         fetch_mock.assert_not_awaited()
-        self.assertEqual(result["final_url"], "https://cached")
-        self.assertTrue(result["cache_hit"])
+        self.assertEqual(result["final_url"], "https://cached-url")
+        self.assertEqual(result["refid"], MOCK_REFID)
+
+    async def test_expired_refid_raises_error(self):
+        refid_url = MOCK_REFID
+        request = AdvancedFetchParams(url=refid_url)
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow._is_refid",
+                return_value=True,
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.get_cached_fetch_by_refid",
+                return_value=None,
+            ),
+        ):
+            with self.assertRaises(ValueError) as cm:
+                await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertIn("不存在或已过期", str(cm.exception))
 
     async def test_eval_returns_stringified_result(self):
         request = AdvancedFetchParams(
             url="https://example.com",
             operation="eval",
             eval={"script": "return 123;"},
+            fetch={"mode": "dynamic"},
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch") as get_cache_mock,
+            patch("advanced_fetch_mcp.workflow.get_cached_fetch_by_refid") as get_cache_mock,
             patch(
                 "advanced_fetch_mcp.workflow.evaluate_script_on_page",
                 new=AsyncMock(
@@ -361,12 +372,14 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         get_cache_mock.assert_not_called()
         self.assertEqual(result["result"], "123")
+        self.assertNotIn("refid", result)
 
     async def test_eval_skips_prefetch_and_uses_eval_final_url(self):
         request = AdvancedFetchParams(
             url="https://example.com",
             operation="eval",
             eval={"script": "document.title"},
+            fetch={"mode": "dynamic"},
         )
         with (
             patch("advanced_fetch_mcp.workflow.fetch_url", new=AsyncMock()) as fetch_mock,
@@ -397,10 +410,10 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_intervention_metadata_is_exposed(self):
         request = AdvancedFetchParams(
             url="https://example.com",
-            fetch={"require_user_intervention": True},
+            operation="request_human_action",
+            fetch={"mode": "dynamic"},
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -411,7 +424,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(result["intervention_ended_by"], "user_marked_ready")
@@ -421,6 +434,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             url="https://example.com",
             operation="eval",
             eval={"script": "return ({ title: document.title });"},
+            fetch={"mode": "dynamic"},
         )
         with (
             patch(
@@ -451,7 +465,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=20,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -461,20 +474,20 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertFalse(result["found"])
         self.assertEqual(result["matches_total"], 0)
 
     async def test_sampling_failure_falls_back_to_rendered_view(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="sampling",
-            sampling={"prompt": "提炼一下"},
-        )
+        with patch("advanced_fetch_mcp.params.ENABLE_PROMPT_EXTRACTION", True):
+            request = AdvancedFetchParams(
+                url="https://example.com",
+                operation="sampling",
+                sampling={"prompt": "提炼一下"},
+            )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -484,7 +497,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                 ),
             ),
             patch("advanced_fetch_mcp.workflow.render_view", return_value="Hello"),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
             patch(
                 "advanced_fetch_mcp.workflow.run_prompt_extraction",
                 new=AsyncMock(side_effect=RuntimeError("llm down")),
@@ -502,7 +515,6 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             max_length=20,
         )
         with (
-            patch("advanced_fetch_mcp.workflow.get_cached_fetch", return_value=None),
             patch(
                 "advanced_fetch_mcp.workflow.fetch_url",
                 new=AsyncMock(
@@ -512,9 +524,66 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     )
                 ),
             ),
-            patch("advanced_fetch_mcp.workflow.store_cached_fetch"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertFalse(result["found"])
         self.assertEqual(result["result"], "")
         self.assertNotIn("next_cursor", result)
+
+    async def test_view_with_links_includes_links_in_response(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            view={"links": {"limit": 5}},
+            max_length=200,
+        )
+        mock_links_result = {
+            "links": [
+                {"href": "/page1", "text": "Page 1", "abs_url": "https://example.com/page1"},
+            ],
+            "links_total": 1,
+            "links_truncated": False,
+        }
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>Hello</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value="Hello"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
+            patch(
+                "advanced_fetch_mcp.workflow.extract_links",
+                return_value=mock_links_result,
+            ),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertEqual(result["links"], mock_links_result["links"])
+        self.assertEqual(result["links_total"], 1)
+        self.assertNotIn("links_truncated", result)  # False → omitted
+
+    async def test_view_without_links_omits_links(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            max_length=200,
+        )
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>Hello</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value="Hello"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
+        ):
+            result = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertNotIn("links", result)
+        self.assertNotIn("links_total", result)

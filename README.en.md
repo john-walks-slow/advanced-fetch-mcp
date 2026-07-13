@@ -11,7 +11,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
 - **LLM Sampling** (experimental): Use `sampling.prompt` to refine page content and return a condensed result. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 - **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `render.cursor` plus top-level `max_length` to continue reading from any position.
-- **Manual intervention and auth**: `fetch.require_user_intervention=true` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
+- **Manual intervention and auth**: `operation="request_human_action"` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
 - **Per-site rate limiting**: Configure `PER_SITE_RATE_LIMIT_SECONDS` to enforce a minimum interval between requests to the same hostname.
@@ -43,9 +43,9 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage. |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | Operation: view, in-page search, LLM extraction, or JS execution. |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or manual intervention. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
-| `render` | `object` | See below | Main-content extraction, output-format, and continue-read configuration. |
+| `view` | `object` | See below | View extraction, output-format, image embedding, and continue-read configuration. |
 | `max_length` | `integer` | `8000` | Maximum result length. |
 | `find` | `object \| null` | `null` | Find configuration. Provide only when operation="find". |
 | `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when operation="sampling". |
@@ -59,50 +59,55 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `fetch.min_stable_seconds` | `number` | `5.0` | Minimum stable duration in seconds for dynamic fetch. |
 | `fetch.min_content_length` | `integer` | `150` | Dynamic fetch requires content length to reach this value and stable duration to succeed. |
 | `fetch.timeout` | `number` | `30.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
-| `fetch.require_user_intervention` | `boolean` | `false` | Use for pages that require login, CAPTCHA, or manual actions. Opens a visible browser window, resumes after completion, and saves auth state for later visits. |
 
-### 3. `render` object
+### 3. `view` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `render.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed. |
-| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
-| `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura-only strategy: strict is cleaner; loose keeps more content. |
-| `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | Extra content types to keep, such as tables, links, and images. |
-| `render.cursor` | `integer \| null` | `null` | Text start offset used only to continue reading long pages. |
+| `view.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
+| `view.markdown_engine` | `"article" \| "full"` | `"article"` | Markdown extraction engine. article uses trafilatura for article main content; full uses markdownify for the full page. |
+| `view.render_images` | `boolean` | `false` | Whether to embed images in the result. When true, downloads images and embeds them as base64 data URIs in markdown; when false, keeps only alt text. |
+| `view.cursor` | `integer \| null` | `null` | Text start offset used only to continue reading long pages. |
+| `view.links` | `object \| null` | `null` | Extract all links from the page. When set, the response includes a links field. |
 
-### 4. `find` object
+### 4. `view.links` object
+
+| Path | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `view.links.limit` | `integer` | `30` | Maximum number of links to return for this request. |
+
+### 5. `find` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
 | `find.regex` | `boolean` | `false` | Whether to treat query as a regular expression. |
 | `find.limit` | `integer` | `12` | Maximum number of matches to return for this request. |
-| `find.snippet_max_chars` | `integer` | `240` | Maximum snippet length for each returned match. |
 | `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. 0 means the first match. |
 
-### 5. `sampling` object
+### 6. `sampling` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | Required | Prompt that guides the LLM to extract information from the page main content. |
 | `sampling.model` | `string \| null` | `null` | Preferred model name. |
 
-### 6. `eval` object
+### 7. `eval` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `eval.script` | `string` | Required | JavaScript code executed in the page context. Supported only in dynamic mode. |
+| `eval.script` | `string` | Required | JavaScript code executed in the page context. |
 
-### 7. Constraints
+### 8. Constraints
 
 | Rule | Description |
 | :--- | :--- |
 | Operation-specific config | The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive. |
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
+| `request_human_action` mode restriction | When `operation="request_human_action"`, `fetch.mode` must be `"dynamic"`. |
 | `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, limiting the final returned result. |
-| `render.cursor` scope | Only valid for `view`. Used to continue reading from a previous `next_cursor` position. |
-| Continue-read consistency | When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid. |
+| `view.cursor` scope | Only valid for `view`. Used to continue reading from a previous `next_cursor` position. |
+| Continue-read consistency | When continuing with `cursor`, use the previous response's `refid` as the `url` to reuse the cache and ensure the same page snapshot. |
 
 
 ## Response format
@@ -114,7 +119,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
   "success": true,
   "final_url": "https://example.com/final",
   "result": "...",
-  "cache_hit": true,
+  "refid": "a1b2c3d4e5f6",
   "timed_out": true,
   "timeout_stage": "network_idle",
   "intervention_ended_by": "timeout",
@@ -131,7 +136,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `success` | `boolean` | Yes | Always `true` on success. |
 | `final_url` | `string` | Yes | Final page URL, which may differ from the input `url`. |
 | `result` | `string` | Yes | Primary return payload. For `view`/`sampling`/`eval`, this is the text result; for `find`, it is currently always an empty string. |
-| `cache_hit` | `boolean` | No | Present when a cached fetch result was reused. |
+| `refid` | `string` | No | Reference ID for this fetch result. Pass this value as the `url` in subsequent requests to reuse the cached result. |
 | `timed_out` | `boolean` | No | Present when a timeout occurred during fetching. |
 | `timeout_stage` | `string` | No | Stage where the timeout occurred. |
 | `intervention_ended_by` | `string` | No | Why manual intervention ended, for example `timeout` or `page_closed`. |
@@ -311,19 +316,14 @@ A site that requires login:
 
 ```yaml
 url: https://private-site.com
-operation: view
+operation: request_human_action
 fetch:
-  require_user_intervention: true
+  mode: dynamic
 ```
 
 ## Session Modes
 
-Browser session behavior is controlled by `BROWSER_SESSION_MODE`:
-
-- `auth`: default and recommended. Uses a normal browser/context and saves auth state through `storage_state.json`; stealth is enabled when available.
-- `profile`: compatibility mode, not recommended. Uses a persistent profile (`user_data_dir`) and does not enable stealth.
-
-In most cases, the default `auth` mode is the right choice.
+To fetch intranet pages, use `operation="request_human_action"` to open a visible browser window. After you log in once, cookies are automatically saved via `storage_state.json`, and subsequent silent requests (without `operation="request_human_action"`) will carry the login state automatically.
 
 ## Cache
 
@@ -350,14 +350,13 @@ Fetched pages are cached by `url + fetch.mode`. The cache is reused later when s
 - `PROMPT_INPUT_MAX_CHARS`: Max input size passed to the LLM. Default: `64000`.
 - `MAX_FIND_MATCHES`: Maximum number of page-search matches to return. Default: `12`.
 - `FIND_SNIPPET_MAX_CHARS`: Max snippet length for each search match. Default: `240`.
+- `MAX_LINKS_COUNT`: Maximum number of links returned by `links` operation. Default: `30`.
 - `SCHEMA_LANGUAGE`: Schema description language. Default: `zh`. Supported values: `zh` / `en`.
 
 ### Browser / Session
 
 - `BROWSER_CHANNEL`: Browser channel passed to Playwright. Default: `chrome`. Allowed values include `chrome`, `chrome-beta`, `chrome-dev`, `msedge`, `msedge-beta`, `msedge-dev`, and `chromium`.
-- `BROWSER_SESSION_MODE`: Browser session mode. Default: `auth`. Use `auth` or `profile`. `auth` is the default and recommended mode.
 - `BROWSER_AUTH_STORAGE_STATE`: Path to `storage_state.json` in `auth` mode. Default: `~/.advanced-fetch-auth/storage_state.json`.
-- `BROWSER_PROFILE_DIR`: Persistent profile directory in `profile` mode. Default: `~/.advanced-fetch-profile`.
 - `BROWSER_LOCALE`: Browser locale. Default: empty string. Leave empty to use the system default.
 - `BROWSER_TIMEZONE_ID`: Browser timezone. Default: empty string. Leave empty to use the system default.
 - `BROWSER_COLOR_SCHEME`: Color scheme. Default: `light`.
@@ -368,7 +367,8 @@ Fetched pages are cached by `url + fetch.mode`. The cache is reused later when s
 
 ### Proxy
 
-- `ENABLE_PROXY`: Whether proxy support is enabled. Default: `true`.
+- `ENABLE_STATIC_PROXY`: Whether proxy is enabled for static fetch mode. Default: `true`.
+- `ENABLE_DYNAMIC_PROXY`: Whether proxy is enabled for dynamic (browser) fetch mode. Default: `false`.
 - `HTTP_PROXY`: HTTP proxy address. Default: empty string.
 - `HTTPS_PROXY`: HTTPS proxy address. Default: empty string.
 - `NO_PROXY`: Proxy bypass list. Default: empty string.

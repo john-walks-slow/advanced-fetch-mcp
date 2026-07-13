@@ -11,7 +11,7 @@
 - **支持动态网站**：基于 Playwright 的动态网站抓取能力，智能识别页面稳定状态。
 - **LLM Sampling**（实验性）：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp 等。
 - **大页面分段处理**：支持 `find.query` 在页面中搜索，并结合 `render.cursor` 与顶层 `max_length` 从任意位置续读。
-- **人工介入和鉴权**：`fetch.require_user_intervention=true` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
+- **人工介入和鉴权**：`operation="request_human_action"` 打开可见浏览器，用户完成登录、验证码或手动操作后继续抓取。登录一次后，后续请求可继续复用登录信息。
 - **反爬伪装**：包含 Playwright-Stealth，尽可能模仿真实请求，尽量防止被检测成机器人。
 - **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
 - **按站点限流**：支持通过环境变量 `PER_SITE_RATE_LIMIT_SECONDS` 为同一 hostname 的请求设置最小间隔。
@@ -43,9 +43,9 @@
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | 必填 | 目标网页的完整 URL。 |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取或执行 JS。 |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取、执行 JS 或请求人工介入。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
-| `render` | `object` | 见下表 | 正文提取、输出格式及续读配置。 |
+| `view` | `object` | 见下表 | 视图提取、输出格式、图片嵌入及续读配置。 |
 | `max_length` | `integer` | `8000` | 结果最大长度。 |
 | `find` | `object \| null` | `null` | 查找配置。仅当 operation="find" 时提供。 |
 | `sampling` | `object \| null` | `null` | 提取配置。仅当 operation="sampling" 时提供。 |
@@ -55,54 +55,59 @@
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" \| "static"` | `"static"` | 抓取方式：dynamic 用浏览器，static 直接请求源码。 |
+| `fetch.mode` | `"dynamic" \| "static"` | `"static"` | 抓取方式：dynamic 用浏览器，static 静态 request。 |
 | `fetch.min_stable_seconds` | `number` | `5.0` | 动态抓取等待内容稳定的最小时长（秒）。 |
 | `fetch.min_content_length` | `integer` | `150` | 动态抓取时内容长度必须达到此值且稳定时间足够才视为成功。 |
 | `fetch.timeout` | `number` | `30.0` | 抓取超时秒数。超时后返回当前已获取内容。 |
-| `fetch.require_user_intervention` | `boolean` | `false` | 用于需要登录、验证码或人工操作的页面。会打开可见浏览器窗口，等待操作完成后自动继续抓取；登录态会保存供后续访问复用。 |
 
-### 三、`render` 对象
+### 三、`view` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `render.engine` | `"trafilatura" \| "markdownify"` | `"trafilatura"` | 提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。 |
-| `render.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
-| `render.strategy` | `"default" \| "strict" \| "loose"` | `"default"` | trafilatura 专用策略：strict 更干净，loose 覆盖更多。 |
-| `render.include_elements` | `Array<"comments" \| "tables" \| "images" \| "links" \| "formatting">` | `["tables", "formatting"]` | 额外保留的内容类型，如 tables、links、images。 |
-| `render.cursor` | `integer \| null` | `null` | 文本起始偏移量。仅用于继续读取长页面。 |
+| `view.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
+| `view.markdown_engine` | `"article" \| "full"` | `"article"` | markdown 提取引擎。article 用 trafilatura 提取文章正文；full 用 markdownify 提取完整页面。 |
+| `view.render_images` | `boolean` | `false` | 是否在结果中嵌入图片。true 时下载图片并转为 base64 data URI 嵌入 markdown；false 时仅保留 alt 文本。 |
+| `view.cursor` | `integer \| null` | `null` | 文本起始偏移量。仅用于继续读取长页面。 |
+| `view.links` | `object \| null` | `null` | 提取页面中的全部链接。提供后响应中会额外包含 links 字段。 |
 
-### 四、`find` 对象
+### 四、`view.links` 对象
+
+| 路径 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `view.links.limit` | `integer` | `30` | 本次最多返回多少条链接。 |
+
+### 五、`find` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | 必填 | 要查找的文本或正则表达式。 |
 | `find.regex` | `boolean` | `false` | 是否将 query 视为正则表达式处理。 |
 | `find.limit` | `integer` | `12` | 本次最多返回多少个匹配项。 |
-| `find.snippet_max_chars` | `integer` | `240` | 每个匹配项 snippet 的最大长度。 |
 | `find.start_index` | `integer` | `0` | 从第几个匹配开始返回，0 表示第一个匹配。 |
 
-### 五、`sampling` 对象
+### 六、`sampling` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | 必填 | 指导 LLM 从页面正文中提取信息的提示词。 |
 | `sampling.model` | `string \| null` | `null` | 偏好的模型名。 |
 
-### 六、`eval` 对象
+### 七、`eval` 对象
 
 | 路径 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `eval.script` | `string` | 必填 | 在页面上下文执行的 JavaScript 代码。仅 dynamic 模式支持。 |
+| `eval.script` | `string` | 必填 | 在页面上下文执行的 JavaScript 代码。 |
 
-### 七、使用约束
+### 八、使用约束
 
 | 规则 | 说明 |
 | :--- | :--- |
 | 操作专属配置 | 仅当 `operation` 为对应值时，才可提供 `find`、`sampling` 或 `eval` 对象，且三者互斥。 |
 | `eval` 模式限制 | `operation="eval"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
+| `request_human_action` 模式限制 | `operation="request_human_action"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
 | `max_length` 作用域 | 对 `view`、`find`、`sampling`、`eval` 均生效，限制最终返回结果。 |
-| `render.cursor` 作用域 | 仅对 `view` 有效。用于从上次返回的 `next_cursor` 位置继续读取。 |
-| 续读一致性 | 使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。 |
+| `view.cursor` 作用域 | 仅对 `view` 有效。用于从上次返回的 `next_cursor` 位置继续读取。 |
+| 续读一致性 | 使用 `cursor` 续读时，填入上次结果的 `refid` 作为 `url` 以复用缓存，确保引用同一份页面快照。 |
 
 
 ## 返回值格式
@@ -114,7 +119,7 @@
   "success": true,
   "final_url": "https://example.com/final",
   "result": "...",
-  "cache_hit": true,
+  "refid": "a1b2c3d4e5f6",
   "timed_out": true,
   "timeout_stage": "network_idle",
   "intervention_ended_by": "timeout",
@@ -131,7 +136,7 @@
 | `success` | `boolean` | 是 | 成功时恒为 `true`。 |
 | `final_url` | `string` | 是 | 最终页面 URL，可能与输入 `url` 不同。 |
 | `result` | `string` | 是 | 主返回内容。`view`/`sampling`/`eval` 为文本结果；`find` 当前固定为空字符串。 |
-| `cache_hit` | `boolean` | 否 | 命中缓存时出现。 |
+| `refid` | `string` | 否 | 本次抓取结果的引用 ID。将此值填入后续请求的 `url` 参数可直接复用缓存。 |
 | `timed_out` | `boolean` | 否 | 抓取阶段发生超时时出现。 |
 | `timeout_stage` | `string` | 否 | 超时所在阶段。 |
 | `intervention_ended_by` | `string` | 否 | 人工介入结束原因，如 `timeout`、`page_closed`。 |
@@ -311,23 +316,23 @@ eval:
 
 ```yaml
 url: https://private-site.com
-operation: view
+operation: request_human_action
 fetch:
-  require_user_intervention: true
+  mode: dynamic
 ```
 
 ## 会话模式
 
-通过环境变量 `BROWSER_SESSION_MODE` 控制浏览器会话模式：
-
-- `auth`：默认值，推荐。使用普通 browser/context，并通过 `storage_state.json` 保存登录态；会尝试启用 stealth。
-- `profile`：兼容模式，不推荐。使用 persistent profile（`user_data_dir`）；不会启用 stealth。
-
-一般情况下，建议始终使用默认的 `auth` 模式。
+抓取内网页面时，使用 `operation="request_human_action"` 打开可见浏览器，登录一次后 cookies 会通过 `storage_state.json` 自动保存，后续静默请求（不带 `operation="request_human_action"`）会自动携带登录态。
 
 ## 缓存
 
-最近抓取的网站会按 `url + fetch.mode` 缓存。后续在同一页里搜索、跳转、续读时复用已有结果。
+每次抓取结果会生成一个 `refid` 返回。将 `refid` 直接填入后续请求的 `url` 参数即可复用缓存，无需重新抓取。
+
+- `refid` 为 12 位 hex 字符串，缓存有效期 5 分钟
+- 使用 `refid` 作为 URL 时不会产生新的 `refid`（同一个 `refid` 始终指向同一份内容）
+- 直接传入普通 URL 时始终重新抓取，不会隐式使用缓存
+- `refid` 过期或不存在时会返回错误，需使用原始 URL 重新抓取
 
 ## 环境变量
 
@@ -350,14 +355,13 @@ fetch:
 - `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。默认 `64000`。
 - `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。默认 `12`。
 - `FIND_SNIPPET_MAX_CHARS`：每条搜索命中的片段长度上限。默认 `240`。
+- `MAX_LINKS_COUNT`：`links` 操作最多返回多少条链接。默认 `30`。
 - `SCHEMA_LANGUAGE`：schema 描述语言。默认 `zh`。 支持 `zh` / `en`。
 
 ### 浏览器 / 会话
 
 - `BROWSER_CHANNEL`：传给 Playwright 的浏览器 channel。默认 `chrome`。 可选值包括 `chrome`、`chrome-beta`、`chrome-dev`、`msedge`、`msedge-beta`、`msedge-dev`、`chromium`。
-- `BROWSER_SESSION_MODE`：浏览器会话模式。默认 `auth`。 可选 `auth` 或 `profile`，默认推荐 `auth`。
 - `BROWSER_AUTH_STORAGE_STATE`：`auth` 模式下 `storage_state.json` 的路径。默认 `~/.advanced-fetch-auth/storage_state.json`。
-- `BROWSER_PROFILE_DIR`：`profile` 模式下 persistent profile 的目录。默认 `~/.advanced-fetch-profile`。
 - `BROWSER_LOCALE`：浏览器 locale。默认 空字符串。 留空则使用系统默认。
 - `BROWSER_TIMEZONE_ID`：浏览器时区。默认 空字符串。 留空则使用系统默认。
 - `BROWSER_COLOR_SCHEME`：颜色方案。默认 `light`。
@@ -368,7 +372,8 @@ fetch:
 
 ### 代理
 
-- `ENABLE_PROXY`：是否启用代理。默认 `true`。
+- `ENABLE_STATIC_PROXY`：static 模式是否启用代理。默认 `true`。
+- `ENABLE_DYNAMIC_PROXY`：dynamic 模式（浏览器）是否启用代理。默认 `false`。
 - `HTTP_PROXY`：HTTP 代理地址。默认 空字符串。
 - `HTTPS_PROXY`：HTTPS 代理地址。默认 空字符串。
 - `NO_PROXY`：代理绕过列表。默认 空字符串。

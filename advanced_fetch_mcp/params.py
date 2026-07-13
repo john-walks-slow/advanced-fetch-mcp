@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .settings import (
     AUTO_WAIT_MIN_CONTENT_LENGTH,
@@ -10,17 +10,15 @@ from .settings import (
     DEFAULT_MAX_LENGTH,
     ENABLE_PROMPT_EXTRACTION,
     FETCH_TIMEOUT_SECONDS,
-    FIND_SNIPPET_MAX_CHARS,
     MAX_FIND_MATCHES,
+    MAX_LINKS_COUNT,
     SCHEMA_LANGUAGE,
 )
 
 FetchMode = Literal["dynamic", "static"]
-FetchEngine = Literal["trafilatura", "markdownify"]
-ExtractStrategy = Literal["default", "strict", "loose"]
+MarkdownEngine = Literal["article", "full"]
 OutputFormat = Literal["markdown", "html"]
-Operation = Literal["view", "find", "sampling", "eval"]
-SemanticExtra = Literal["comments", "tables", "images", "links", "formatting"]
+Operation = Literal["view", "find", "sampling", "eval", "request_human_action"]
 
 
 def schema_text(zh: str, en: str) -> str:
@@ -45,8 +43,8 @@ OperationParam = Annotated[
     Field(
         default="view",
         description=schema_text(
-            "操作类型：查看、页面内搜索、LLM 提取或执行 JS。",
-            "Operation: view, in-page search, LLM extraction, or JS execution.",
+            "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求人工介入处理鉴权（如登录、解决 captcha 等）。",
+            "Operation: view, in-page search, LLM extraction, JS execution, or manual intervention.",
         ),
     ),
 ]
@@ -55,7 +53,7 @@ FetchModeParam = Annotated[
     Field(
         default="static",
         description=schema_text(
-            "抓取方式：dynamic 用浏览器，static 直接请求源码。",
+            "抓取方式：dynamic 用浏览器，static 静态 request。",
             "Fetch mode: dynamic uses a browser; static requests source HTML directly.",
         ),
     ),
@@ -68,16 +66,6 @@ TimeoutParam = Annotated[
         description=schema_text(
             "抓取超时秒数。超时后返回当前已获取内容。",
             "Fetch timeout in seconds. On timeout, return the content obtained so far.",
-        ),
-    ),
-]
-RequireInterventionParam = Annotated[
-    bool,
-    Field(
-        default=False,
-        description=schema_text(
-            "用于需要登录、验证码或人工操作的页面。会打开可见浏览器窗口，等待操作完成后自动继续抓取；登录态会保存供后续访问复用。",
-            "Use for pages that require login, CAPTCHA, or manual actions. Opens a visible browser window, resumes after completion, and saves auth state for later visits.",
         ),
     ),
 ]
@@ -113,33 +101,23 @@ OutputFormatParam = Annotated[
         ),
     ),
 ]
-StrategyParam = Annotated[
-    ExtractStrategy,
+MarkdownEngineParam = Annotated[
+    MarkdownEngine,
     Field(
-        default="default",
+        default="article",
         description=schema_text(
-            "trafilatura 专用策略：strict 更干净，loose 覆盖更多。",
-            "trafilatura-only strategy: strict is cleaner; loose keeps more content.",
+            "markdown 提取引擎。article 用 trafilatura 提取文章正文；full 用 markdownify 提取完整页面。",
+            "Markdown extraction engine. article uses trafilatura for article main content; full uses markdownify for the full page.",
         ),
     ),
 ]
-FetchEngineParam = Annotated[
-    FetchEngine,
+RenderImagesParam = Annotated[
+    bool,
     Field(
-        default="trafilatura",
+        default=False,
         description=schema_text(
-            "提取引擎。trafilatura 适合文章/正文类页面；复杂页面可用 markdownify 覆盖更多页面内容。",
-            "Extraction engine. trafilatura works best for articles/main content; use markdownify for complex pages where broader page content is needed.",
-        ),
-    ),
-]
-IncludeElementsParam = Annotated[
-    list[SemanticExtra],
-    Field(
-        default=["tables", "formatting"],
-        description=schema_text(
-            "额外保留的内容类型，如 tables、links、images。",
-            "Extra content types to keep, such as tables, links, and images.",
+            "是否在结果中嵌入图片。true 时下载图片并转为 base64 data URI 嵌入 markdown；false 时仅保留 alt 文本。",
+            "Whether to embed images in the result. When true, downloads images and embeds them as base64 data URIs in markdown; when false, keeps only alt text.",
         ),
     ),
 ]
@@ -195,14 +173,14 @@ FindLimitParam = Annotated[
         ),
     ),
 ]
-FindSnippetMaxCharsParam = Annotated[
+LinksLimitParam = Annotated[
     int,
     Field(
-        default=FIND_SNIPPET_MAX_CHARS,
+        default=MAX_LINKS_COUNT,
         ge=1,
         description=schema_text(
-            "每个匹配项 snippet 的最大长度。",
-            "Maximum snippet length for each returned match.",
+            "本次最多返回多少条链接。",
+            "Maximum number of links to return for this request.",
         ),
     ),
 ]
@@ -240,8 +218,8 @@ EvalScriptParam = Annotated[
     str,
     Field(
         description=schema_text(
-            "在页面上下文执行的 JavaScript 代码。仅 dynamic 模式支持。",
-            "JavaScript code executed in the page context. Supported only in dynamic mode.",
+            "在页面上下文执行的 JavaScript 代码。",
+            "JavaScript code executed in the page context.",
         )
     ),
 ]
@@ -254,34 +232,22 @@ class FetchParams(BaseModel):
     min_stable_seconds: MinStableSecondsParam
     min_content_length: MinContentLengthParam
     timeout: TimeoutParam
-    require_user_intervention: RequireInterventionParam
 
 
-class RenderParams(BaseModel):
+class ViewParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    engine: FetchEngineParam
     output_format: OutputFormatParam
-    strategy: StrategyParam
-    include_elements: IncludeElementsParam
+    markdown_engine: MarkdownEngineParam
+    render_images: RenderImagesParam
     cursor: CursorParam
-
-    @field_validator("include_elements", mode="before")
-    @classmethod
-    def _normalize_include_elements(cls, value):
-        if value is None:
-            return ["tables", "formatting"]
-        if isinstance(value, str):
-            value = [value]
-        normalized: list[str] = []
-        seen: set[str] = set()
-        for item in value:
-            text = str(item).strip().lower()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            normalized.append(text)
-        return normalized
+    links: Optional[LinksParams] = Field(
+        default=None,
+        description=schema_text(
+            "提取页面中的全部链接。提供后响应中会额外包含 links 字段。",
+            "Extract all links from the page. When set, the response includes a links field.",
+        ),
+    )
 
 
 class FindParams(BaseModel):
@@ -290,7 +256,6 @@ class FindParams(BaseModel):
     query: FindQueryParam
     regex: FindRegexParam
     limit: FindLimitParam
-    snippet_max_chars: FindSnippetMaxCharsParam
     start_index: FindStartIndexParam
 
 
@@ -307,6 +272,12 @@ class EvalParams(BaseModel):
     script: EvalScriptParam
 
 
+class LinksParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    limit: LinksLimitParam
+
+
 FetchParam = Annotated[
     FetchParams,
     Field(
@@ -317,13 +288,13 @@ FetchParam = Annotated[
         ),
     ),
 ]
-RenderParam = Annotated[
-    RenderParams,
+ViewParam = Annotated[
+    ViewParams,
     Field(
-        default_factory=RenderParams,
+        default_factory=ViewParams,
         description=schema_text(
-            "正文提取、输出格式及续读配置。",
-            "Main-content extraction, output-format, and continue-read configuration.",
+            "视图提取、输出格式、图片嵌入及续读配置。",
+            "View extraction, output-format, image embedding, and continue-read configuration.",
         ),
     ),
 ]
@@ -365,21 +336,17 @@ class AdvancedFetchParams(BaseModel):
     url: UrlParam
     operation: OperationParam
     fetch: FetchParam
-    render: RenderParam
+    view: ViewParam
     max_length: MaxLengthParam
     find: FindParam
     sampling: SamplingParam
     eval: EvalParam
 
-    @property
-    def can_use_cache(self) -> bool:
-        return self.operation == "find" or self.render.cursor is not None
-
-    def to_render_config(self) -> "RenderConfig":
-        return RenderConfig(
-            output_format=self.render.output_format,
-            strategy=self.render.strategy,
-            include_elements=self.render.include_elements,
+    def to_view_config(self) -> "ViewConfig":
+        return ViewConfig(
+            output_format=self.view.output_format,
+            markdown_engine=self.view.markdown_engine,
+            render_images=self.view.render_images,
         )
 
     @model_validator(mode="after")
@@ -394,6 +361,21 @@ class AdvancedFetchParams(BaseModel):
                     schema_error(
                         "operation=view 时，不能提供 find、sampling 或 eval 对象。",
                         "When operation=view, find, sampling, and eval objects must not be provided.",
+                    )
+                )
+        elif self.operation == "request_human_action":
+            if has_find or has_sampling or has_eval:
+                raise ValueError(
+                    schema_error(
+                        "operation=request_human_action 时，不能提供 find、sampling 或 eval 对象。",
+                        "When operation=request_human_action, find, sampling, and eval objects must not be provided.",
+                    )
+                )
+            if self.fetch.mode != "dynamic":
+                raise ValueError(
+                    schema_error(
+                        "operation=request_human_action 时，fetch.mode 必须为 dynamic。",
+                        "When operation=request_human_action, fetch.mode must be dynamic.",
                     )
                 )
         elif self.operation == "find":
@@ -435,26 +417,18 @@ class AdvancedFetchParams(BaseModel):
                     )
                 )
 
-        if self.operation != "view" and self.render.cursor is not None:
+        if self.operation != "view" and self.view.cursor is not None:
             raise ValueError(
                 schema_error(
-                    "render.cursor 仅对 view 操作有效。",
-                    "render.cursor is only valid for view operations.",
-                )
-            )
-
-        if self.render.engine == "markdownify" and self.render.strategy != "default":
-            raise ValueError(
-                schema_error(
-                    "render.engine=markdownify 时，render.strategy 只能为 default。",
-                    "When render.engine=markdownify, render.strategy must be default.",
+                    "view.cursor 仅对 view 操作有效。",
+                    "view.cursor is only valid for view operations.",
                 )
             )
 
         return self
 
 
-class RenderConfig(BaseModel):
+class ViewConfig(BaseModel):
     output_format: OutputFormatParam
-    strategy: StrategyParam
-    include_elements: IncludeElementsParam
+    markdown_engine: MarkdownEngineParam
+    render_images: RenderImagesParam

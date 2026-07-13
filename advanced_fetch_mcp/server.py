@@ -13,9 +13,9 @@ from .params import (
     FindParam,
     MaxLengthParam,
     OperationParam,
-    RenderParam,
     SamplingParam,
     UrlParam,
+    ViewParam,
     schema_text,
 )
 from .workflow import execute_advanced_fetch
@@ -30,7 +30,7 @@ async def advanced_fetch(
     url: UrlParam,
     operation: OperationParam,
     fetch: FetchParam,
-    render: RenderParam,
+    view: ViewParam,
     max_length: MaxLengthParam,
     find: FindParam,
     sampling: SamplingParam,

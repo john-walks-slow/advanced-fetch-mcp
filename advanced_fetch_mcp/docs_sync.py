@@ -49,23 +49,26 @@ SECTION_LABELS = {
         "see_below": "见下表",
         "top": "### 一、顶层参数",
         "fetch": "### 二、`fetch` 对象",
-        "render": "### 三、`render` 对象",
-        "find": "### 四、`find` 对象",
-        "sampling": "### 五、`sampling` 对象",
-        "eval": "### 六、`eval` 对象",
-        "constraints": "### 七、使用约束",
+        "view": "### 三、`view` 对象",
+        "view_links": "### 四、`view.links` 对象",
+        "find": "### 五、`find` 对象",
+        "sampling": "### 六、`sampling` 对象",
+        "eval": "### 七、`eval` 对象",
+        "constraints": "### 八、使用约束",
         "rule": "规则",
         "rule_desc": "说明",
         "operation_specific": "操作专属配置",
         "operation_specific_desc": "仅当 `operation` 为对应值时，才可提供 `find`、`sampling` 或 `eval` 对象，且三者互斥。",
         "eval_mode": "`eval` 模式限制",
         "eval_mode_desc": "`operation=\"eval\"` 时，`fetch.mode` 必须为 `\"dynamic\"`。",
+        "intervention_mode": "`request_human_action` 模式限制",
+        "intervention_mode_desc": "`operation=\"request_human_action\"` 时，`fetch.mode` 必须为 `\"dynamic\"`。",
         "max_length_scope": "`max_length` 作用域",
         "max_length_scope_desc": "对 `view`、`find`、`sampling`、`eval` 均生效，限制最终返回结果。",
-        "cursor_scope": "`render.cursor` 作用域",
+        "cursor_scope": "`view.cursor` 作用域",
         "cursor_scope_desc": "仅对 `view` 有效。用于从上次返回的 `next_cursor` 位置继续读取。",
         "cursor_consistency": "续读一致性",
-        "cursor_consistency_desc": "使用 `cursor` 续读时，应保持 `output_format` 与 `strategy` 不变，否则偏移位置可能失效。",
+        "cursor_consistency_desc": "使用 `cursor` 续读时，填入上次结果的 `refid` 作为 `url` 以复用缓存，确保引用同一份页面快照。",
     },
     "en": {
         "core": "General",
@@ -84,23 +87,26 @@ SECTION_LABELS = {
         "see_below": "See below",
         "top": "### 1. Top-level parameters",
         "fetch": "### 2. `fetch` object",
-        "render": "### 3. `render` object",
-        "find": "### 4. `find` object",
-        "sampling": "### 5. `sampling` object",
-        "eval": "### 6. `eval` object",
-        "constraints": "### 7. Constraints",
+        "view": "### 3. `view` object",
+        "view_links": "### 4. `view.links` object",
+        "find": "### 5. `find` object",
+        "sampling": "### 6. `sampling` object",
+        "eval": "### 7. `eval` object",
+        "constraints": "### 8. Constraints",
         "rule": "Rule",
         "rule_desc": "Description",
         "operation_specific": "Operation-specific config",
         "operation_specific_desc": "The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive.",
         "eval_mode": "`eval` mode restriction",
         "eval_mode_desc": "When `operation=\"eval\"`, `fetch.mode` must be `\"dynamic\"`.",
+        "intervention_mode": "`request_human_action` mode restriction",
+        "intervention_mode_desc": "When `operation=\"request_human_action\"`, `fetch.mode` must be `\"dynamic\"`.",
         "max_length_scope": "`max_length` scope",
         "max_length_scope_desc": "Applies to `view`, `find`, `sampling`, and `eval`, limiting the final returned result.",
-        "cursor_scope": "`render.cursor` scope",
+        "cursor_scope": "`view.cursor` scope",
         "cursor_scope_desc": "Only valid for `view`. Used to continue reading from a previous `next_cursor` position.",
         "cursor_consistency": "Continue-read consistency",
-        "cursor_consistency_desc": "When continuing with `cursor`, keep `output_format` and `strategy` unchanged, otherwise the offset may become invalid.",
+        "cursor_consistency_desc": "When continuing with `cursor`, use the previous response's `refid` as the `url` to reuse the cache and ensure the same page snapshot.",
     },
 }
 
@@ -220,7 +226,7 @@ def _render_table(lines: list[str], header_name: str, properties: dict[str, Any]
                 path=path,
                 type_=_escape_table_cell(_format_type(schema)),
                 default=_escape_table_cell(
-                    _format_default(schema, required=name in required, lang=lang, see_below=prefix == "" and name in {"fetch", "render"})
+                    _format_default(schema, required=name in required, lang=lang, see_below=prefix == "" and name in {"fetch", "view"})
                 ),
                 description=_escape_table_cell(schema["description"]),
             )
@@ -235,8 +241,11 @@ def render_readme_schema_section(lang: str) -> str:
     _render_table(lines, labels["name"], schema["properties"], set(schema.get("required", [])), lang)
     lines.extend(["", labels["fetch"], ""])
     _render_table(lines, labels["path"], defs["FetchParams"]["properties"], set(defs["FetchParams"].get("required", [])), lang, prefix="fetch.")
-    lines.extend(["", labels["render"], ""])
-    _render_table(lines, labels["path"], defs["RenderParams"]["properties"], set(defs["RenderParams"].get("required", [])), lang, prefix="render.")
+    lines.extend(["", labels["view"], ""])
+    _render_table(lines, labels["path"], defs["ViewParams"]["properties"], set(defs["ViewParams"].get("required", [])), lang, prefix="view.")
+    if "LinksParams" in defs:
+        lines.extend(["", labels["view_links"], ""])
+        _render_table(lines, labels["path"], defs["LinksParams"]["properties"], set(defs["LinksParams"].get("required", [])), lang, prefix="view.links.")
     lines.extend(["", labels["find"], ""])
     _render_table(lines, labels["path"], defs["FindParams"]["properties"], set(defs["FindParams"].get("required", [])), lang, prefix="find.")
     lines.extend(["", labels["sampling"], ""])
@@ -252,6 +261,7 @@ def render_readme_schema_section(lang: str) -> str:
             "| :--- | :--- |",
             f"| {labels['operation_specific']} | {labels['operation_specific_desc']} |",
             f"| {labels['eval_mode']} | {labels['eval_mode_desc']} |",
+            f"| {labels['intervention_mode']} | {labels['intervention_mode_desc']} |",
             f"| {labels['max_length_scope']} | {labels['max_length_scope_desc']} |",
             f"| {labels['cursor_scope']} | {labels['cursor_scope_desc']} |",
             f"| {labels['cursor_consistency']} | {labels['cursor_consistency_desc']} |",
