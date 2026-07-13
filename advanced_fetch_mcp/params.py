@@ -316,13 +316,7 @@ class AdvancedFetchParams(BaseModel):
                         "When operation=request_human_action, find, sampling, and eval objects must not be provided.",
                     )
                 )
-            if self.fetch.mode != "dynamic":
-                raise ValueError(
-                    schema_error(
-                        "operation=request_human_action 时，fetch.mode 必须为 dynamic。",
-                        "When operation=request_human_action, fetch.mode must be dynamic.",
-                    )
-                )
+            self.fetch.mode = "dynamic"
         elif self.operation == "find":
             if not has_find or has_sampling or has_eval:
                 raise ValueError(
