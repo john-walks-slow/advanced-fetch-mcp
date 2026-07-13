@@ -50,11 +50,10 @@ SECTION_LABELS = {
         "top": "### 一、顶层参数",
         "fetch": "### 二、`fetch` 对象",
         "view": "### 三、`view` 对象",
-        "view_links": "### 四、`view.links` 对象",
-        "find": "### 五、`find` 对象",
-        "sampling": "### 六、`sampling` 对象",
-        "eval": "### 七、`eval` 对象",
-        "constraints": "### 八、使用约束",
+        "find": "### 四、`find` 对象",
+        "sampling": "### 五、`sampling` 对象",
+        "eval": "### 六、`eval` 对象",
+        "constraints": "### 七、使用约束",
         "rule": "规则",
         "rule_desc": "说明",
         "operation_specific": "操作专属配置",
@@ -65,8 +64,8 @@ SECTION_LABELS = {
         "intervention_mode_desc": "`operation=\"request_human_action\"` 时，`fetch.mode` 必须为 `\"dynamic\"`。",
         "max_length_scope": "`max_length` 作用域",
         "max_length_scope_desc": "对 `view`、`find`、`sampling`、`eval` 均生效，限制最终返回结果。",
-        "cursor_scope": "`view.cursor` 作用域",
-        "cursor_scope_desc": "仅对 `view` 有效。用于从上次返回的 `next_cursor` 位置继续读取。",
+        "cursor_scope": "`cursor` 作用域",
+        "cursor_scope_desc": "对 `view` 和 `find` 均有效。用于从上次返回的 `next_cursor` 位置继续读取。",
         "cursor_consistency": "续读一致性",
         "cursor_consistency_desc": "使用 `cursor` 续读时，填入上次结果的 `refid` 作为 `url` 以复用缓存，确保引用同一份页面快照。",
     },
@@ -88,11 +87,10 @@ SECTION_LABELS = {
         "top": "### 1. Top-level parameters",
         "fetch": "### 2. `fetch` object",
         "view": "### 3. `view` object",
-        "view_links": "### 4. `view.links` object",
-        "find": "### 5. `find` object",
-        "sampling": "### 6. `sampling` object",
-        "eval": "### 7. `eval` object",
-        "constraints": "### 8. Constraints",
+        "find": "### 4. `find` object",
+        "sampling": "### 5. `sampling` object",
+        "eval": "### 6. `eval` object",
+        "constraints": "### 7. Constraints",
         "rule": "Rule",
         "rule_desc": "Description",
         "operation_specific": "Operation-specific config",
@@ -243,9 +241,6 @@ def render_readme_schema_section(lang: str) -> str:
     _render_table(lines, labels["path"], defs["FetchParams"]["properties"], set(defs["FetchParams"].get("required", [])), lang, prefix="fetch.")
     lines.extend(["", labels["view"], ""])
     _render_table(lines, labels["path"], defs["ViewParams"]["properties"], set(defs["ViewParams"].get("required", [])), lang, prefix="view.")
-    if "LinksParams" in defs:
-        lines.extend(["", labels["view_links"], ""])
-        _render_table(lines, labels["path"], defs["LinksParams"]["properties"], set(defs["LinksParams"].get("required", [])), lang, prefix="view.links.")
     lines.extend(["", labels["find"], ""])
     _render_table(lines, labels["path"], defs["FindParams"]["properties"], set(defs["FindParams"].get("required", [])), lang, prefix="find.")
     lines.extend(["", labels["sampling"], ""])

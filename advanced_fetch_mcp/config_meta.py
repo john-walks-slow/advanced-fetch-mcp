@@ -27,7 +27,7 @@ SECTION_TITLES = {
 
 
 ENV_VAR_SPECS: tuple[EnvVarSpec, ...] = (
-    EnvVarSpec("FETCH_TIMEOUT", "30", "core", "抓取总超时秒数。", "Total fetch timeout in seconds."),
+    EnvVarSpec("FETCH_TIMEOUT", "12", "core", "抓取总超时秒数。", "Total fetch timeout in seconds."),
     EnvVarSpec(
         "PER_SITE_RATE_LIMIT_SECONDS",
         "1.0",
@@ -47,19 +47,19 @@ ENV_VAR_SPECS: tuple[EnvVarSpec, ...] = (
     ),
     EnvVarSpec(
         "AUTO_WAIT_MIN_STABLE_SECONDS",
-        "5.0",
+        "3.0",
         "auto_wait",
         "动态抓取时等待内容稳定的最小时长（秒）。",
         "Minimum stable duration in seconds for dynamic fetch.",
-        example_comment="Minimum stable duration in seconds (default: 5.0)",
+        example_comment="Minimum stable duration in seconds (default: 3.0)",
     ),
     EnvVarSpec(
         "AUTO_WAIT_MIN_CONTENT_LENGTH",
         "150",
         "auto_wait",
-        "动态抓取时的最小内容长度阈值。内容稳定且长度达到此阈值时提前结束等待。",
-        "Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early.",
-        example_comment="Minimum content length for early exit (default: 150)",
+        "动态抓取时内容最小长度。内容稳定且长度达到此阈值才视为就绪。",
+        "Minimum content length for dynamic fetch. Content must be stable and reach this length to be considered ready.",
+        example_comment="Minimum content length (default: 150)",
     ),
     EnvVarSpec(
         "AUTO_WAIT_SAMPLE_EDGE_CHARS",

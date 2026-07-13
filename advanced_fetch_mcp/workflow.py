@@ -14,7 +14,7 @@ from .fetch import (
 )
 from .params import AdvancedFetchParams
 from .sampling import run_prompt_extraction
-from .settings import AUTO_WAIT_MIN_CONTENT_LENGTH, logger
+from .settings import MAX_FIND_MATCHES, MAX_LINKS_COUNT, logger
 
 FIND_MATCHES_WARNING = "命中数量过多，matches 已按请求参数或服务默认限制截断。"
 
@@ -134,7 +134,7 @@ async def execute_advanced_fetch(
         warnings = _build_warnings(eval_result.fetch_result)
         result_text, truncated = _truncate_text_middle(
             _serialize_result_value(eval_result.value),
-            request.max_length,
+            request.view.max_length,
         )
         return _build_public_result(
             fetch_result=eval_result.fetch_result,
@@ -156,17 +156,11 @@ async def execute_advanced_fetch(
                 f"refid '{url}' 不存在或已过期，请使用原始 URL 重新抓取。"
             )
     else:
-        early_exit_min_length = (
-            request.fetch.min_content_length
-            if request.fetch.min_content_length is not None
-            else AUTO_WAIT_MIN_CONTENT_LENGTH
-        )
         fetch_result = await fetch_url(
             url,
             request.fetch.mode,
             require_intervention,
             request.fetch.min_stable_seconds,
-            early_exit_min_length,
             request.fetch.timeout,
         )
         refid = store_cached_fetch(
@@ -178,14 +172,14 @@ async def execute_advanced_fetch(
         fetch_result.html, request.to_view_config(), base_url=fetch_result.final_url
     )
 
-    # Extract links if view.links is configured
+    # Extract links if view.links is enabled
     links_result = None
-    if request.view.links is not None:
+    if request.view.links:
         links_result = extract_links(
             html=fetch_result.html,
             base_url=fetch_result.final_url,
             rendered_text=rendered,
-            limit=request.view.links.limit,
+            limit=MAX_LINKS_COUNT,
         )
 
     if request.operation == "find":
@@ -193,9 +187,7 @@ async def execute_advanced_fetch(
             rendered,
             request.find.query if request.find else "",
             request.find.regex if request.find else False,
-            request.find.limit if request.find else None,
-            None,
-            request.find.start_index if request.find else 0,
+            cursor=request.cursor,
         )
         if find_result["matches_truncated"]:
             warnings.append(FIND_MATCHES_WARNING)
@@ -209,17 +201,18 @@ async def execute_advanced_fetch(
             links_result=links_result,
         )
 
-    if request.view.cursor is not None:
+    if request.cursor is not None:
         continue_result = continue_in_text(
             rendered,
-            request.view.cursor,
-            request.max_length,
+            request.cursor,
+            request.view.max_length,
         )
         return _build_public_result(
             fetch_result=fetch_result,
             result_payload=continue_result["text"],
             warnings=warnings,
             refid=refid,
+            truncated=continue_result.get("next_cursor") is not None,
             next_cursor=continue_result.get("next_cursor"),
             links_result=links_result,
         )
@@ -244,7 +237,7 @@ async def execute_advanced_fetch(
             result_text = rendered
         result_text, truncated = _truncate_text_middle(
             result_text,
-            request.max_length,
+            request.view.max_length,
         )
         return _build_public_result(
             fetch_result=fetch_result,
@@ -255,7 +248,7 @@ async def execute_advanced_fetch(
             links_result=links_result,
         )
 
-    view_result = continue_in_text(rendered, 0, request.max_length)
+    view_result = continue_in_text(rendered, 0, request.view.max_length)
     return _build_public_result(
         fetch_result=fetch_result,
         result_payload=view_result["text"],

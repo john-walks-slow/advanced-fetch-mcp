@@ -278,6 +278,7 @@ class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
         mock_page = MagicMock()
         mock_page.url = "https://example.com"
         mock_page.content = AsyncMock(return_value="<html><body>short</body></html>")
+        mock_page.is_closed.return_value = False
 
         call_count = 0
 
@@ -289,18 +290,19 @@ class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
         with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
             with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()):
                 with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=[0.0, 0.1, 0.2, 0.3, 1.0]):
-                    await _wait_for_content_stable(
-                        mock_page,
-                        deadline=10.0,
-                        min_stable_seconds=0.05,
-                        early_exit_min_length=None,
-                    )
+                    with patch("advanced_fetch_mcp.fetch.AUTO_WAIT_MIN_CONTENT_LENGTH", 1):
+                        await _wait_for_content_stable(
+                            mock_page,
+                            deadline=10.0,
+                            min_stable_seconds=0.05,
+                        )
 
     async def test_waits_when_stable_but_length_not_met(self):
         from advanced_fetch_mcp.fetch import _wait_for_content_stable
 
         mock_page = MagicMock()
         mock_page.url = "https://example.com"
+        mock_page.is_closed.return_value = False
 
         samples = ["short", "short", "long enough content here"]
         sample_idx = 0
@@ -328,12 +330,12 @@ class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
         with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
             with patch("advanced_fetch_mcp.fetch.asyncio.sleep", side_effect=mock_sleep):
                 with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=mock_time):
-                    await _wait_for_content_stable(
-                        mock_page,
-                        deadline=10.0,
-                        min_stable_seconds=0.05,
-                        early_exit_min_length=20,
-                    )
+                    with patch("advanced_fetch_mcp.fetch.AUTO_WAIT_MIN_CONTENT_LENGTH", 20):
+                        await _wait_for_content_stable(
+                            mock_page,
+                            deadline=10.0,
+                            min_stable_seconds=0.05,
+                        )
 
         self.assertGreaterEqual(sample_idx, 3)
 
@@ -342,6 +344,7 @@ class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
 
         mock_page = MagicMock()
         mock_page.url = "https://example.com"
+        mock_page.is_closed.return_value = False
 
         sample_idx = 0
 
@@ -353,12 +356,12 @@ class WaitForContentStableTests(unittest.IsolatedAsyncioTestCase):
         with patch("advanced_fetch_mcp.fetch._sample_page_extracted_text", side_effect=mock_sample):
             with patch("advanced_fetch_mcp.fetch.asyncio.sleep", new=AsyncMock()):
                 with patch("advanced_fetch_mcp.fetch.time.monotonic", side_effect=[0.0, 0.1, 0.2, 0.3, 1.0]):
-                    await _wait_for_content_stable(
-                        mock_page,
-                        deadline=10.0,
-                        min_stable_seconds=0.05,
-                        early_exit_min_length=20,
-                    )
+                    with patch("advanced_fetch_mcp.fetch.AUTO_WAIT_MIN_CONTENT_LENGTH", 1):
+                        await _wait_for_content_stable(
+                            mock_page,
+                            deadline=10.0,
+                            min_stable_seconds=0.05,
+                        )
 
         self.assertEqual(sample_idx, 3)
 
@@ -402,7 +405,7 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_handles_goto_timeout_gracefully(self):
         from advanced_fetch_mcp.fetch import evaluate_script_on_page
-        from playwright.asyncio.api import TimeoutError as PlaywrightTimeoutError
+        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
         mock_page = MagicMock()
         mock_page.goto = AsyncMock(side_effect=PlaywrightTimeoutError("timeout"))

@@ -10,7 +10,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Main-content extraction**: Built on top of trafilatura with configurable extraction strategy and scope, removing as much noise as possible to save tokens.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
 - **LLM Sampling** (experimental): Use `sampling.prompt` to refine page content and return a condensed result. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
-- **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `render.cursor` plus top-level `max_length` to continue reading from any position.
+- **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `cursor` plus `view.max_length` to continue reading from any position.
 - **Manual intervention and auth**: `operation="request_human_action"` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
@@ -44,8 +44,9 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage. |
 | `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or manual intervention. |
+| `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. Use the next_cursor value from the previous response. |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
-| `view` | `object` | See below | View extraction, output-format, image embedding, and continue-read configuration. |
+| `view` | `object` | See below | View extraction, output-format, image embedding, result length, and continue-read configuration. |
 | `max_length` | `integer` | `8000` | Maximum result length. |
 | `find` | `object \| null` | `null` | Find configuration. Provide only when operation="find". |
 | `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when operation="sampling". |
@@ -56,9 +57,8 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `fetch.mode` | `"dynamic" \| "static"` | `"static"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
-| `fetch.min_stable_seconds` | `number` | `5.0` | Minimum stable duration in seconds for dynamic fetch. |
-| `fetch.min_content_length` | `integer` | `150` | Dynamic fetch requires content length to reach this value and stable duration to succeed. |
-| `fetch.timeout` | `number` | `30.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
+| `fetch.min_stable_seconds` | `number` | `3.0` | Minimum stable duration in seconds for dynamic fetch. |
+| `fetch.timeout` | `number` | `12.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
 
 ### 3. `view` object
 
@@ -67,38 +67,30 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `view.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
 | `view.markdown_engine` | `"article" \| "full"` | `"article"` | Markdown extraction engine. article uses trafilatura for article main content; full uses markdownify for the full page. |
 | `view.render_images` | `boolean` | `false` | Whether to embed images in the result. When true, downloads images and embeds them as base64 data URIs in markdown; when false, keeps only alt text. |
-| `view.cursor` | `integer \| null` | `null` | Text start offset used only to continue reading long pages. |
-| `view.links` | `object \| null` | `null` | Extract all links from the page. When set, the response includes a links field. |
+| `view.max_length` | `integer` | `8000` | Maximum result length. |
+| `view.links` | `boolean` | `true` | Whether to extract all links from the page. When true, the response includes a links field. |
 
-### 4. `view.links` object
-
-| Path | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `view.links.limit` | `integer` | `30` | Maximum number of links to return for this request. |
-
-### 5. `find` object
+### 4. `find` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `find.query` | `string` | Required | Text or regular expression to search for. |
 | `find.regex` | `boolean` | `false` | Whether to treat query as a regular expression. |
-| `find.limit` | `integer` | `12` | Maximum number of matches to return for this request. |
-| `find.start_index` | `integer` | `0` | Zero-based match index to start returning from. 0 means the first match. |
 
-### 6. `sampling` object
+### 5. `sampling` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `sampling.prompt` | `string` | Required | Prompt that guides the LLM to extract information from the page main content. |
 | `sampling.model` | `string \| null` | `null` | Preferred model name. |
 
-### 7. `eval` object
+### 6. `eval` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `eval.script` | `string` | Required | JavaScript code executed in the page context. |
 
-### 8. Constraints
+### 7. Constraints
 
 | Rule | Description |
 | :--- | :--- |
@@ -106,7 +98,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
 | `request_human_action` mode restriction | When `operation="request_human_action"`, `fetch.mode` must be `"dynamic"`. |
 | `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, limiting the final returned result. |
-| `view.cursor` scope | Only valid for `view`. Used to continue reading from a previous `next_cursor` position. |
+| `cursor` scope | Valid for both `view` and `find`. Used to continue reading from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, use the previous response's `refid` as the `url` to reuse the cache and ensure the same page snapshot. |
 
 
@@ -237,35 +229,49 @@ url: https://example.com
 operation: view
 ```
 
-Keep more content (`loose` strategy):
+Get the full page as markdown (keep all content, no article extraction):
 
 ```yaml
 url: https://example.com
 operation: view
-render:
-  strategy: loose
+view:
+  markdown_engine: full
 ```
 
-Keep links and images:
+Extract links from the page:
 
 ```yaml
 url: https://example.com
 operation: view
-render:
-  include_elements:
-    - tables
-    - formatting
-    - links
-    - images
+view:
+  links: true
 ```
 
-Wait 5 extra seconds:
+Embed images in the result (as base64 data URIs):
+
+```yaml
+url: https://example.com
+operation: view
+view:
+  render_images: true
+```
+
+Output as HTML:
+
+```yaml
+url: https://example.com
+operation: view
+view:
+  output_format: html
+```
+
+Set timeout:
 
 ```yaml
 url: https://example.com
 operation: view
 fetch:
-  wait_for: 5
+  timeout: 60
 ```
 
 Search for a keyword:
@@ -277,14 +283,12 @@ find:
   query: price
 ```
 
-Continue reading from a search position:
+Continue reading from a specific position (using `matches[].cursor` or `next_cursor` from a `find` response):
 
 ```yaml
-url: https://example.com
+url: <refid>
 operation: view
-max_length: 300
-render:
-  cursor: 300 # assume this is a cursor returned from a previous match
+cursor: 300
 ```
 
 Use sampling to refine the result:
@@ -327,20 +331,25 @@ To fetch intranet pages, use `operation="request_human_action"` to open a visibl
 
 ## Cache
 
-Fetched pages are cached by `url + fetch.mode`. The cache is reused later when searching, jumping, or continuing within the same page.
+Each fetch result generates a `refid`. Pass the `refid` directly as the `url` in subsequent requests to reuse the cache without re-fetching.
+
+- `refid` is a 12-character hex string, with a cache TTL of 24 hours
+- Using a `refid` as the `url` will not generate a new `refid` (the same `refid` always points to the same content)
+- Passing a regular URL always triggers a fresh fetch, never implicitly using the cache
+- If the `refid` has expired or does not exist, an error is returned; use the original URL to re-fetch
 
 ## Environment Variables
 
 ### General
 
-- `FETCH_TIMEOUT`: Total fetch timeout in seconds. Default: `30`.
+- `FETCH_TIMEOUT`: Total fetch timeout in seconds. Default: `12`.
 - `PER_SITE_RATE_LIMIT_SECONDS`: Minimum interval in seconds between requests to the same hostname. Default: `1.0`. Set to `0` to disable it. Serialized requests include a small random jitter to avoid an overly regular access pattern.
 
 ### Auto-wait
 
 - `AUTO_WAIT_POLL_INTERVAL`: Polling interval in seconds for dynamic-content stability detection. Default: `0.25`.
-- `AUTO_WAIT_MIN_STABLE_SECONDS`: Minimum stable duration in seconds for dynamic fetch. Default: `5.0`.
-- `AUTO_WAIT_MIN_CONTENT_LENGTH`: Minimum content length threshold for dynamic fetch. When content is stable and reaches this length, exit early. Default: `150`.
+- `AUTO_WAIT_MIN_STABLE_SECONDS`: Minimum stable duration in seconds for dynamic fetch. Default: `3.0`.
+- `AUTO_WAIT_MIN_CONTENT_LENGTH`: Minimum content length for dynamic fetch. Content must be stable and reach this length to be considered ready. Default: `150`.
 - `AUTO_WAIT_SAMPLE_EDGE_CHARS`: Number of leading and trailing characters compared during stability detection. Default: `200`.
 
 ### Extraction / LLM

@@ -209,7 +209,7 @@ class BrowserManager:
         return pw, browser
 
     @asynccontextmanager
-    async def _auth_session(self, *, headless: bool) -> AsyncIterator[BrowserContext]:
+    async def _auth_session(self, *, headless: bool, apply_stealth: bool = True) -> AsyncIterator[BrowserContext]:
         pw, browser = await self._launch_browser(headless=headless)
         context: Optional[BrowserContext] = None
         try:
@@ -218,7 +218,8 @@ class BrowserManager:
                 context_kwargs["storage_state"] = str(AUTH_STORAGE_STATE_PATH)
 
             context = await browser.new_context(**context_kwargs)
-            await apply_auth_stealth(context)
+            if apply_stealth:
+                await apply_auth_stealth(context)
             yield context
         finally:
             if context is not None:
@@ -245,8 +246,8 @@ class BrowserManager:
                 logger.warning("[Browser] 停止 Playwright 出错: %s", exc)
 
     @asynccontextmanager
-    async def open_session(self, *, headless: bool) -> AsyncIterator[BrowserContext]:
-        async with self._auth_session(headless=headless) as ctx:
+    async def open_session(self, *, headless: bool, apply_stealth: bool = True) -> AsyncIterator[BrowserContext]:
+        async with self._auth_session(headless=headless, apply_stealth=apply_stealth) as ctx:
             yield ctx
 
     async def close(self):

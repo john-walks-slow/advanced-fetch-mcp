@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Tuple
 
@@ -45,16 +46,37 @@ def build_intervention_script() -> str:
 
 
 async def wait_for_intervention_end(page: Page) -> Tuple[str, str, str]:
+    page_closed = asyncio.Event()
+
+    def _on_close():
+        page_closed.set()
+
+    page.on("close", _on_close)
+
     reason = "timeout"
-    try:
-        await page.wait_for_function(
+    button_task = asyncio.create_task(
+        page.wait_for_function(
             "() => window.__ADVANCED_FETCH_INTERVENTION_DONE__ === true",
             timeout=INTERVENTION_TIMEOUT_SECONDS * 1000,
         )
+    )
+    close_task = asyncio.create_task(page_closed.wait())
+
+    done, pending = await asyncio.wait(
+        {button_task, close_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    for task in pending:
+        task.cancel()
+
+    if page_closed.is_set():
+        reason = "page_closed"
+    elif button_task.done() and not button_task.cancelled() and button_task.exception() is None:
         reason = "user_marked_ready"
-    except Exception:
-        if page.is_closed():
-            reason = "page_closed"
+
+    if reason == "timeout" and page.is_closed():
+        reason = "page_closed"
 
     try:
         html = await page.content()

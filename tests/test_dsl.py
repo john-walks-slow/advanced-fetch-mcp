@@ -5,11 +5,9 @@ from pydantic import ValidationError
 
 from advanced_fetch_mcp.params import AdvancedFetchParams
 from advanced_fetch_mcp.settings import (
-    AUTO_WAIT_MIN_CONTENT_LENGTH,
     AUTO_WAIT_MIN_STABLE_SECONDS,
     DEFAULT_MAX_LENGTH,
     FETCH_TIMEOUT_SECONDS,
-    MAX_FIND_MATCHES,
 )
 
 
@@ -20,12 +18,12 @@ class DSLTests(unittest.TestCase):
         self.assertEqual(request.fetch.mode, "static")
         self.assertEqual(request.fetch.timeout, FETCH_TIMEOUT_SECONDS)
         self.assertEqual(request.fetch.min_stable_seconds, AUTO_WAIT_MIN_STABLE_SECONDS)
-        self.assertEqual(request.fetch.min_content_length, AUTO_WAIT_MIN_CONTENT_LENGTH)
         self.assertEqual(request.view.output_format, "markdown")
         self.assertEqual(request.view.markdown_engine, "article")
         self.assertFalse(request.view.render_images)
+        self.assertTrue(request.view.links)
         self.assertEqual(request.max_length, DEFAULT_MAX_LENGTH)
-        self.assertIsNone(request.view.cursor)
+        self.assertIsNone(request.cursor)
 
     def test_find_requires_find_object(self):
         request = AdvancedFetchParams(
@@ -35,37 +33,16 @@ class DSLTests(unittest.TestCase):
         )
         self.assertEqual(request.operation, "find")
         self.assertEqual(request.find.query, "x")
-        self.assertEqual(request.find.limit, MAX_FIND_MATCHES)
-        self.assertEqual(request.find.start_index, 0)
 
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(url="https://example.com", operation="find")
 
-    def test_find_accepts_extended_paging_params(self):
-        request = AdvancedFetchParams(
-            url="https://example.com",
-            operation="find",
-            find={
-                "query": "x",
-                "limit": 3,
-                "start_index": 2,
-            },
-        )
-        self.assertEqual(request.find.limit, 3)
-        self.assertEqual(request.find.start_index, 2)
-
-    def test_find_extended_paging_params_validate_ranges(self):
+    def test_find_params_reject_unknown_fields(self):
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(
                 url="https://example.com",
                 operation="find",
-                find={"query": "x", "limit": 0},
-            )
-        with self.assertRaises(ValidationError):
-            AdvancedFetchParams(
-                url="https://example.com",
-                operation="find",
-                find={"query": "x", "start_index": -1},
+                find={"query": "x", "limit": 3},
             )
 
     def test_eval_is_exclusive(self):
@@ -129,21 +106,21 @@ class DSLTests(unittest.TestCase):
         )
         self.assertEqual(request.view.markdown_engine, "full")
 
-    def test_cursor_is_only_valid_for_view(self):
-        with self.assertRaises(ValidationError):
-            AdvancedFetchParams(
-                url="https://example.com",
-                operation="sampling",
-                view={"cursor": 5},
-                sampling={"prompt": "提取"},
-            )
+    def test_cursor_is_top_level_and_valid_for_view_or_find(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="find",
+            cursor=50,
+            find={"query": "x"},
+        )
+        self.assertEqual(request.cursor, 50)
 
         with self.assertRaises(ValidationError):
             AdvancedFetchParams(
                 url="https://example.com",
-                operation="find",
-                view={"cursor": 5},
-                find={"query": "x"},
+                operation="sampling",
+                cursor=5,
+                sampling={"prompt": "提取"},
             )
 
     def test_max_length_is_top_level(self):
@@ -152,6 +129,19 @@ class DSLTests(unittest.TestCase):
             max_length=321,
         )
         self.assertEqual(request.max_length, 321)
+
+    def test_view_links_is_boolean(self):
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            view={"links": True},
+        )
+        self.assertTrue(request.view.links)
+
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                view={"links": {"limit": 10}},
+            )
 
     def test_view_forbids_old_params(self):
         with self.assertRaises(ValidationError):
@@ -170,4 +160,11 @@ class DSLTests(unittest.TestCase):
             AdvancedFetchParams(
                 url="https://example.com",
                 view={"include_elements": ["tables"]},
+            )
+
+    def test_view_rejects_old_cursor_param(self):
+        with self.assertRaises(ValidationError):
+            AdvancedFetchParams(
+                url="https://example.com",
+                view={"cursor": 5},
             )

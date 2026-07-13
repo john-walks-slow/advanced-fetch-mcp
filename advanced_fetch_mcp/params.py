@@ -5,13 +5,10 @@ from typing import Annotated, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .settings import (
-    AUTO_WAIT_MIN_CONTENT_LENGTH,
     AUTO_WAIT_MIN_STABLE_SECONDS,
     DEFAULT_MAX_LENGTH,
     ENABLE_PROMPT_EXTRACTION,
     FETCH_TIMEOUT_SECONDS,
-    MAX_FIND_MATCHES,
-    MAX_LINKS_COUNT,
     SCHEMA_LANGUAGE,
 )
 
@@ -33,7 +30,7 @@ UrlParam = Annotated[
     str,
     Field(
         description=schema_text(
-            "目标网页的完整 URL。",
+            "目标网页的完整 URL 或之前结果的引用 ID（复用抓取结果）。",
             "Full URL of the target webpage.",
         )
     ),
@@ -43,7 +40,7 @@ OperationParam = Annotated[
     Field(
         default="view",
         description=schema_text(
-            "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求人工介入处理鉴权（如登录、解决 captcha 等）。",
+            "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作网站（当且仅当被 captcha / 登录墙阻拦时使用。鉴权信息会保存下来。）。",
             "Operation: view, in-page search, LLM extraction, JS execution, or manual intervention.",
         ),
     ),
@@ -53,7 +50,7 @@ FetchModeParam = Annotated[
     Field(
         default="static",
         description=schema_text(
-            "抓取方式：dynamic 用浏览器，static 静态 request。",
+            "抓取方式：dynamic=浏览器，static=request。自动复用鉴权信息。",
             "Fetch mode: dynamic uses a browser; static requests source HTML directly.",
         ),
     ),
@@ -77,17 +74,6 @@ MinStableSecondsParam = Annotated[
         description=schema_text(
             "动态抓取等待内容稳定的最小时长（秒）。",
             "Minimum stable duration in seconds for dynamic fetch.",
-        ),
-    ),
-]
-MinContentLengthParam = Annotated[
-    int,
-    Field(
-        default=AUTO_WAIT_MIN_CONTENT_LENGTH,
-        ge=1,
-        description=schema_text(
-            "动态抓取时内容长度必须达到此值且稳定时间足够才视为成功。",
-            "Dynamic fetch requires content length to reach this value and stable duration to succeed.",
         ),
     ),
 ]
@@ -138,8 +124,8 @@ CursorParam = Annotated[
         default=None,
         ge=0,
         description=schema_text(
-            "文本起始偏移量。仅用于继续读取长页面。",
-            "Text start offset used only to continue reading long pages.",
+            "继续读取的偏移量。对 view 和 find 操作均有效。",
+            "Continue-read offset. Valid for both view and find operations. Use the next_cursor value from the previous response.",
         ),
     ),
 ]
@@ -159,39 +145,6 @@ FindRegexParam = Annotated[
         description=schema_text(
             "是否将 query 视为正则表达式处理。",
             "Whether to treat query as a regular expression.",
-        ),
-    ),
-]
-FindLimitParam = Annotated[
-    int,
-    Field(
-        default=MAX_FIND_MATCHES,
-        ge=1,
-        description=schema_text(
-            "本次最多返回多少个匹配项。",
-            "Maximum number of matches to return for this request.",
-        ),
-    ),
-]
-LinksLimitParam = Annotated[
-    int,
-    Field(
-        default=MAX_LINKS_COUNT,
-        ge=1,
-        description=schema_text(
-            "本次最多返回多少条链接。",
-            "Maximum number of links to return for this request.",
-        ),
-    ),
-]
-FindStartIndexParam = Annotated[
-    int,
-    Field(
-        default=0,
-        ge=0,
-        description=schema_text(
-            "从第几个匹配开始返回，0 表示第一个匹配。",
-            "Zero-based match index to start returning from. 0 means the first match.",
         ),
     ),
 ]
@@ -230,7 +183,6 @@ class FetchParams(BaseModel):
 
     mode: FetchModeParam
     min_stable_seconds: MinStableSecondsParam
-    min_content_length: MinContentLengthParam
     timeout: TimeoutParam
 
 
@@ -240,12 +192,12 @@ class ViewParams(BaseModel):
     output_format: OutputFormatParam
     markdown_engine: MarkdownEngineParam
     render_images: RenderImagesParam
-    cursor: CursorParam
-    links: Optional[LinksParams] = Field(
-        default=None,
+    max_length: MaxLengthParam
+    links: bool = Field(
+        default=True,
         description=schema_text(
-            "提取页面中的全部链接。提供后响应中会额外包含 links 字段。",
-            "Extract all links from the page. When set, the response includes a links field.",
+            "是否提取页面中的出链。",
+            "Whether to extract all links from the page. When true, the response includes a links field.",
         ),
     )
 
@@ -255,8 +207,6 @@ class FindParams(BaseModel):
 
     query: FindQueryParam
     regex: FindRegexParam
-    limit: FindLimitParam
-    start_index: FindStartIndexParam
 
 
 class SamplingParams(BaseModel):
@@ -270,12 +220,6 @@ class EvalParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     script: EvalScriptParam
-
-
-class LinksParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    limit: LinksLimitParam
 
 
 FetchParam = Annotated[
@@ -293,8 +237,8 @@ ViewParam = Annotated[
     Field(
         default_factory=ViewParams,
         description=schema_text(
-            "视图提取、输出格式、图片嵌入及续读配置。",
-            "View extraction, output-format, image embedding, and continue-read configuration.",
+            "View 操作配置",
+            "View extraction, output-format, image embedding, result length, and continue-read configuration.",
         ),
     ),
 ]
@@ -303,7 +247,7 @@ FindParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "查找配置。仅当 operation=\"find\" 时提供。",
+            "Find 操作配置",
             "Find configuration. Provide only when operation=\"find\".",
         ),
     ),
@@ -313,7 +257,7 @@ SamplingParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "提取配置。仅当 operation=\"sampling\" 时提供。",
+            "Sampling 操作配置",
             "Sampling configuration. Provide only when operation=\"sampling\".",
         ),
     ),
@@ -323,7 +267,7 @@ EvalParam = Annotated[
     Field(
         default=None,
         description=schema_text(
-            "脚本配置。仅当 operation=\"eval\" 时提供。",
+            "Eval 操作配置",
             "Script configuration. Provide only when operation=\"eval\".",
         ),
     ),
@@ -335,6 +279,7 @@ class AdvancedFetchParams(BaseModel):
 
     url: UrlParam
     operation: OperationParam
+    cursor: CursorParam
     fetch: FetchParam
     view: ViewParam
     max_length: MaxLengthParam
@@ -417,11 +362,11 @@ class AdvancedFetchParams(BaseModel):
                     )
                 )
 
-        if self.operation != "view" and self.view.cursor is not None:
+        if self.cursor is not None and self.operation not in ("view", "find"):
             raise ValueError(
                 schema_error(
-                    "view.cursor 仅对 view 操作有效。",
-                    "view.cursor is only valid for view operations.",
+                    "cursor 仅对 view 和 find 操作有效。",
+                    "cursor is only valid for view and find operations.",
                 )
             )
 

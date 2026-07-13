@@ -333,9 +333,7 @@ def search_in_text(
     full_text: str,
     query: str,
     use_regex: bool,
-    match_limit: int | None = None,
-    snippet_max_chars: int | None = None,
-    start_index: int = 0,
+    cursor: int | None = None,
 ) -> Dict[str, Any]:
     if use_regex:
         try:
@@ -345,9 +343,9 @@ def search_in_text(
     else:
         regex = re.compile(re.escape(query), re.IGNORECASE)
 
-    found_matches = list(regex.finditer(full_text))
-    matches_total = len(found_matches)
-    if not found_matches:
+    all_matches = list(regex.finditer(full_text))
+    matches_total = len(all_matches)
+    if not all_matches:
         return {
             "text": "",
             "found": False,
@@ -357,35 +355,34 @@ def search_in_text(
             "next_cursor": None,
         }
 
-    effective_start_index = max(0, start_index)
-    effective_limit = MAX_FIND_MATCHES if match_limit is None else max(1, match_limit)
-    effective_snippet_max_chars = (
-        FIND_SNIPPET_MAX_CHARS
-        if snippet_max_chars is None
-        else max(1, snippet_max_chars)
-    )
-    returned_matches = found_matches[
-        effective_start_index : effective_start_index + effective_limit
-    ]
-    matches_truncated = (
-        effective_start_index > 0
-        or effective_start_index + len(returned_matches) < matches_total
-    )
+    # Filter matches at or after cursor position
+    if cursor is not None:
+        filtered = [m for m in all_matches if m.start() >= cursor]
+    else:
+        filtered = all_matches
+
+    returned = filtered[:MAX_FIND_MATCHES]
+    matches_truncated = len(returned) < len(filtered)
+
+    effective_snippet_max_chars = FIND_SNIPPET_MAX_CHARS
     matches = [
         _build_match_summary(
             full_text=full_text,
             match=match,
             snippet_max_chars=effective_snippet_max_chars,
         )
-        for match in returned_matches
+        for match in returned
     ]
 
-    first = matches[0] if matches else None
-    next_cursor = first["cursor"] if first else None
+    # next_cursor: text offset of the first unreturned match (for forward pagination)
+    next_cursor = None
+    if matches_truncated:
+        next_match = filtered[len(returned)]
+        next_cursor = encode_cursor(next_match.start())
 
     return {
         "text": "",
-        "found": True,
+        "found": bool(matches),
         "matches": matches,
         "matches_total": matches_total,
         "matches_truncated": matches_truncated,
