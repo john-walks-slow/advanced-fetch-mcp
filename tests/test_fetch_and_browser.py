@@ -1,21 +1,21 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from advanced_fetch_mcp.browser import BrowserManager
+from advanced_fetch_mcp.browser import BrowserManager, _proxy_settings
 from advanced_fetch_mcp.fetch import (
     FetchResult,
-    _FETCH_CACHE,
+    _REFID_CACHE,
     _SITE_RATE_LIMIT_NEXT_ALLOWED_AT,
     _build_page_evaluate_script,
     fetch_url,
-    get_cached_fetch,
+    get_cached_fetch_by_refid,
     store_cached_fetch,
 )
 
 
 class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
-        _FETCH_CACHE.clear()
+        _REFID_CACHE.clear()
         _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.clear()
 
     async def test_fetch_url_forces_dynamic_when_intervention_requested(self):
@@ -51,23 +51,23 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         mock_static.assert_called_once_with("https://example.com", None)
         self.assertEqual(result.final_url, "u")
 
-    async def test_open_session_rejects_invalid_session_mode(self):
-        manager = BrowserManager()
-        with patch("advanced_fetch_mcp.browser.BROWSER_SESSION_MODE", "invalid"):
-            with self.assertRaises(RuntimeError):
-                async with manager.open_session(headless=True):
-                    pass
 
-    def test_cache_is_partitioned_by_url_and_mode(self):
-        store_cached_fetch(
+    def test_cache_stores_and_retrieves_by_refid(self):
+        refid = store_cached_fetch(
             "https://example.com", "static", "https://static", "<main>static</main>"
         )
-        self.assertEqual(
-            get_cached_fetch("https://example.com", "static"),
-            ("https://static", "<main>static</main>"),
+        self.assertIsNotNone(refid)
+        self.assertEqual(len(refid), 12)
+
+        cached = get_cached_fetch_by_refid(refid)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached, ("https://static", "<main>static</main>"))
+
+        # Same url+mode generates different refid each time
+        refid2 = store_cached_fetch(
+            "https://example.com", "static", "https://static2", "<main>new</main>"
         )
-        self.assertIsNone(get_cached_fetch("https://example.com", "dynamic"))
-        self.assertIsNone(get_cached_fetch("https://other.com", "static"))
+        self.assertNotEqual(refid, refid2)
 
     def test_evaluate_script_wraps_function_body_style_snippets(self):
         wrapped = _build_page_evaluate_script("return { title: document.title };")
@@ -115,11 +115,13 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
 
     def test_proxy_settings_reads_http_proxy(self):
         import os
+        from unittest.mock import patch
         from advanced_fetch_mcp.browser import _proxy_settings
 
         original = os.environ.get("HTTP_PROXY")
         os.environ["HTTP_PROXY"] = "http://proxy.example.com:8080"
-        settings = _proxy_settings()
+        with patch("advanced_fetch_mcp.browser.ENABLE_DYNAMIC_PROXY", True):
+            settings = _proxy_settings()
         if original:
             os.environ["HTTP_PROXY"] = original
         else:
@@ -130,6 +132,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
 
     def test_proxy_settings_reads_https_proxy(self):
         import os
+        from unittest.mock import patch
         from advanced_fetch_mcp.browser import _proxy_settings
 
         original_http = os.environ.get("HTTP_PROXY")
@@ -137,7 +140,8 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         os.environ["HTTP_PROXY"] = "http://proxy1.example.com:8080"
         os.environ["HTTPS_PROXY"] = "http://proxy2.example.com:8080"
 
-        settings = _proxy_settings()
+        with patch("advanced_fetch_mcp.browser.ENABLE_DYNAMIC_PROXY", True):
+            settings = _proxy_settings()
 
         if original_http:
             os.environ["HTTP_PROXY"] = original_http
@@ -174,19 +178,6 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(settings)
 
-    async def test_browser_manager_close_clears_shared_state(self):
-        manager = BrowserManager()
-        context = AsyncMock()
-        playwright = AsyncMock()
-        manager._shared_profile_contexts = {("chrome", "profile"): context}
-        manager._shared_playwright = playwright
-
-        await manager.close()
-
-        context.close.assert_awaited_once()
-        playwright.stop.assert_awaited_once()
-        self.assertEqual(manager._shared_profile_contexts, {})
-        self.assertIsNone(manager._shared_playwright)
 
 
 class ShouldBypassProxyTests(unittest.TestCase):
@@ -411,7 +402,7 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_handles_goto_timeout_gracefully(self):
         from advanced_fetch_mcp.fetch import evaluate_script_on_page
-        from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.asyncio.api import TimeoutError as PlaywrightTimeoutError
 
         mock_page = MagicMock()
         mock_page.goto = AsyncMock(side_effect=PlaywrightTimeoutError("timeout"))

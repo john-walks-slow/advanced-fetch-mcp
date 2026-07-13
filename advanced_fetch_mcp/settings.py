@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 import urllib3
@@ -83,8 +83,6 @@ def should_bypass_proxy(url: str) -> bool:
 
 
 def get_proxy_url() -> Optional[str]:
-    if not env_flag("ENABLE_PROXY", True):
-        return None
     return (
         os.getenv("HTTPS_PROXY")
         or os.getenv("https_proxy")
@@ -98,21 +96,19 @@ def get_no_proxy() -> Optional[str]:
     return _normalize_no_proxy(raw)
 
 
+ENABLE_STATIC_PROXY = env_flag("ENABLE_STATIC_PROXY", True)
+ENABLE_DYNAMIC_PROXY = env_flag("ENABLE_DYNAMIC_PROXY", False)
+
+
 def get_requests_proxies(url: Optional[str] = None) -> Optional[dict[str, str]]:
+    if not ENABLE_STATIC_PROXY:
+        return None
     proxy_url = get_proxy_url()
     if not proxy_url:
         return None
     if url and should_bypass_proxy(url):
         return None
     return {"http": proxy_url, "https": proxy_url}
-
-
-def _env_session_mode() -> Literal["auth", "profile"]:
-    default_mode = env_default("BROWSER_SESSION_MODE")
-    raw = (os.getenv("BROWSER_SESSION_MODE", default_mode) or default_mode).strip().lower()
-    if raw in {"auth", "profile"}:
-        return raw
-    return default_mode
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -136,6 +132,7 @@ ENABLE_PROMPT_EXTRACTION = env_flag("ENABLE_PROMPT_EXTRACTION", env_default("ENA
 PROMPT_INPUT_MAX_CHARS = int(os.getenv("PROMPT_INPUT_MAX_CHARS", env_default("PROMPT_INPUT_MAX_CHARS")))
 MAX_FIND_MATCHES = int(os.getenv("MAX_FIND_MATCHES", env_default("MAX_FIND_MATCHES")))
 FIND_SNIPPET_MAX_CHARS = int(os.getenv("FIND_SNIPPET_MAX_CHARS", env_default("FIND_SNIPPET_MAX_CHARS")))
+MAX_LINKS_COUNT = int(os.getenv("MAX_LINKS_COUNT", env_default("MAX_LINKS_COUNT")))
 SCHEMA_LANGUAGE = env_choice("SCHEMA_LANGUAGE", env_default("SCHEMA_LANGUAGE"), {"zh", "en"})
 
 BROWSER_CHANNEL = env_choice(
@@ -143,13 +140,6 @@ BROWSER_CHANNEL = env_choice(
     env_default("BROWSER_CHANNEL"),
     {"chrome", "chrome-beta", "chrome-dev", "msedge", "msedge-beta", "msedge-dev", "chromium"},
 )
-BROWSER_SESSION_MODE = _env_session_mode()
-BROWSER_PROFILE_DIR = Path(
-    os.getenv(
-        "BROWSER_PROFILE_DIR",
-        env_default("BROWSER_PROFILE_DIR"),
-    )
-).expanduser()
 AUTH_STORAGE_STATE_PATH = Path(
     os.getenv(
         "BROWSER_AUTH_STORAGE_STATE",
@@ -176,7 +166,3 @@ LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
 logger = logging.getLogger("AdvancedFetchMCP")
 
-if BROWSER_SESSION_MODE == "profile":
-    logger.warning(
-        "[Browser] 当前 BROWSER_SESSION_MODE=profile。该模式仅为兼容保留，不推荐使用，且不会启用 stealth。"
-    )

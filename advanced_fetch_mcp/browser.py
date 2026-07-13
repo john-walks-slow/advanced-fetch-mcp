@@ -4,9 +4,9 @@ import os
 import shutil
 import sys
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator, Literal, Optional
+from typing import AsyncIterator, Optional
 
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
@@ -15,11 +15,10 @@ from .settings import (
     BROWSER_CHANNEL,
     BROWSER_COLOR_SCHEME,
     BROWSER_LOCALE,
-    BROWSER_PROFILE_DIR,
-    BROWSER_SESSION_MODE,
     BROWSER_TIMEZONE_ID,
     BROWSER_VIEWPORT_HEIGHT,
     BROWSER_VIEWPORT_WIDTH,
+    ENABLE_DYNAMIC_PROXY,
     USER_AGENT,
     IGNORE_SSL_ERRORS,
     get_no_proxy,
@@ -28,10 +27,11 @@ from .settings import (
 )
 from .stealth import apply_auth_stealth
 
-SessionMode = Literal["auth", "profile"]
-
 
 def _proxy_settings():
+    if not ENABLE_DYNAMIC_PROXY:
+        return None
+
     proxy_url = get_proxy_url()
     if not proxy_url:
         return None
@@ -94,16 +94,15 @@ def _base_context_kwargs() -> dict:
     return kwargs
 
 
-def _base_browser_kwargs(*, headless: bool, session_mode: SessionMode) -> dict:
+def _base_browser_kwargs(*, headless: bool) -> dict:
     kwargs = {
         "headless": headless,
         "proxy": _proxy_settings(),
-    }
-    if session_mode == "auth":
-        kwargs["args"] = [
+        "args": [
             "--disable-blink-features=AutomationControlled",
             "--disable-infobars",
-        ]
+        ],
+    }
     channel = _channel_name()
     if channel:
         kwargs["channel"] = channel
@@ -167,8 +166,8 @@ def _system_browser_candidates(channel: Optional[str]) -> list[Path]:
     return []
 
 
-def _launch_variants(*, headless: bool, session_mode: SessionMode) -> list[dict]:
-    primary = _base_browser_kwargs(headless=headless, session_mode=session_mode)
+def _launch_variants(*, headless: bool) -> list[dict]:
+    primary = _base_browser_kwargs(headless=headless)
     variants = [primary]
 
     channel = primary.get("channel")
@@ -184,10 +183,10 @@ def _launch_variants(*, headless: bool, session_mode: SessionMode) -> list[dict]
     return variants
 
 
-async def _launch_browser_with_fallback(pw: Playwright, *, headless: bool, session_mode: SessionMode) -> Browser:
+async def _launch_browser_with_fallback(pw: Playwright, *, headless: bool) -> Browser:
     launch_errors: list[Exception] = []
 
-    for index, kwargs in enumerate(_launch_variants(headless=headless, session_mode=session_mode), start=1):
+    for index, kwargs in enumerate(_launch_variants(headless=headless), start=1):
         try:
             browser = await pw.chromium.launch(**kwargs)
             if "executable_path" in kwargs:
@@ -202,82 +201,12 @@ async def _launch_browser_with_fallback(pw: Playwright, *, headless: bool, sessi
     raise launch_errors[-1]
 
 
-async def _launch_persistent_context_with_fallback(pw: Playwright, *, user_data_dir: str, headless: bool) -> BrowserContext:
-    launch_errors: list[Exception] = []
-    for index, kwargs in enumerate(_launch_variants(headless=headless, session_mode="profile"), start=1):
-        persistent_kwargs = {"user_data_dir": user_data_dir, **kwargs, **_base_context_kwargs()}
-        try:
-            context = await pw.chromium.launch_persistent_context(**persistent_kwargs)
-            if "executable_path" in persistent_kwargs:
-                logger.info(
-                    "[Browser] 已通过系统浏览器可执行文件启动 persistent profile: %s",
-                    persistent_kwargs["executable_path"],
-                )
-            elif persistent_kwargs.get("channel"):
-                logger.info(
-                    "[Browser] 已通过 channel 启动 persistent profile: %s",
-                    persistent_kwargs["channel"],
-                )
-            return context
-        except Exception as exc:
-            launch_errors.append(exc)
-            logger.warning("[Browser] 启动 persistent profile 失败(尝试 %s): %s", index, exc)
-
-    raise launch_errors[-1]
-
-
 @dataclass(slots=True)
 class BrowserManager:
-    _shared_playwright: Optional[Playwright] = None
-    _shared_profile_contexts: dict[tuple[str, str], BrowserContext] = field(default_factory=dict)
-
-    async def _ensure_shared_playwright(self) -> Playwright:
-        if self._shared_playwright is None:
-            self._shared_playwright = await async_playwright().start()
-        return self._shared_playwright
-
     async def _launch_browser(self, *, headless: bool) -> tuple[Playwright, Browser]:
         pw = await async_playwright().start()
-        browser = await _launch_browser_with_fallback(pw, headless=headless, session_mode="auth")
+        browser = await _launch_browser_with_fallback(pw, headless=headless)
         return pw, browser
-
-    @asynccontextmanager
-    async def _profile_headless_session(self, profile_dir: Path) -> AsyncIterator[BrowserContext]:
-        key = ((_channel_name() or ""), str(profile_dir.resolve()))
-        context = self._shared_profile_contexts.get(key)
-        if context is None:
-            pw = await self._ensure_shared_playwright()
-            context = await _launch_persistent_context_with_fallback(
-                pw,
-                user_data_dir=str(profile_dir),
-                headless=True,
-            )
-            self._shared_profile_contexts[key] = context
-            logger.info("[Browser] 已启动共享 persistent profile: %s", profile_dir)
-        yield context
-
-    @asynccontextmanager
-    async def _profile_headful_session(self, profile_dir: Path) -> AsyncIterator[BrowserContext]:
-        pw = await async_playwright().start()
-        context: Optional[BrowserContext] = None
-        try:
-            context = await _launch_persistent_context_with_fallback(
-                pw,
-                user_data_dir=str(profile_dir),
-                headless=False,
-            )
-            logger.info("[Browser] 已启动临时 headful profile: %s", profile_dir)
-            yield context
-        finally:
-            if context is not None:
-                try:
-                    await context.close()
-                except Exception as exc:
-                    logger.warning("[Browser] 关闭临时 profile context 出错: %s", exc)
-            try:
-                await pw.stop()
-            except Exception as exc:
-                logger.warning("[Browser] 停止临时 Playwright 出错: %s", exc)
 
     @asynccontextmanager
     async def _auth_session(self, *, headless: bool) -> AsyncIterator[BrowserContext]:
@@ -317,39 +246,11 @@ class BrowserManager:
 
     @asynccontextmanager
     async def open_session(self, *, headless: bool) -> AsyncIterator[BrowserContext]:
-        session_mode: SessionMode = BROWSER_SESSION_MODE
-        if session_mode not in {"auth", "profile"}:
-            raise RuntimeError(f"不支持的 session_mode: {session_mode}")
-
-        if session_mode == "profile":
-            profile_dir = Path(BROWSER_PROFILE_DIR).expanduser()
-            profile_dir.mkdir(parents=True, exist_ok=True)
-
-            if headless:
-                async with self._profile_headless_session(profile_dir) as ctx:
-                    yield ctx
-            else:
-                async with self._profile_headful_session(profile_dir) as ctx:
-                    yield ctx
-            return
-
         async with self._auth_session(headless=headless) as ctx:
             yield ctx
 
     async def close(self):
-        for key, context in list(self._shared_profile_contexts.items()):
-            try:
-                await context.close()
-            except Exception as exc:
-                logger.warning("[Browser] 关闭共享 persistent context 出错(%s): %s", key, exc)
-        self._shared_profile_contexts.clear()
-
-        if self._shared_playwright is not None:
-            try:
-                await self._shared_playwright.stop()
-            except Exception as exc:
-                logger.warning("[Browser] 停止共享 Playwright 出错: %s", exc)
-            self._shared_playwright = None
+        pass
 
 
 browser_manager = BrowserManager()

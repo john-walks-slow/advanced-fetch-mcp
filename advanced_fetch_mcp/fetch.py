@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import random
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, Tuple
 from urllib.parse import urlparse
@@ -25,6 +27,7 @@ from .settings import (
     AUTO_WAIT_POLL_INTERVAL_SECONDS,
     AUTO_WAIT_MIN_STABLE_SECONDS,
     AUTO_WAIT_SAMPLE_EDGE_CHARS,
+    AUTH_STORAGE_STATE_PATH,
 )
 
 TimeoutStage = Literal["goto", "static_request"]
@@ -49,9 +52,10 @@ class EvalInterventionClosedError(RuntimeError):
     pass
 
 
-_FETCH_CACHE: dict[tuple[str, FetchMode], Tuple[float, str, str]] = {}
-_FETCH_CACHE_MAX_SIZE = 100
-_FETCH_CACHE_TTL_SECONDS = 300.0
+_REFID_CACHE: dict[str, Tuple[float, str, str, str]] = {}
+_REFID_CACHE_MAX_SIZE = 100
+_REFID_CACHE_TTL_SECONDS = 86400.0
+_REFID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 _SITE_RATE_LIMIT_NEXT_ALLOWED_AT: dict[str, float] = {}
 _SITE_RATE_LIMIT_LOCK = asyncio.Lock()
 _SITE_RATE_LIMIT_MAX_JITTER_SECONDS = 0.15
@@ -60,26 +64,32 @@ _FUNCTION_LIKE_SCRIPT_RE = re.compile(
 )
 
 
-def _cache_key(url: str, mode: FetchMode) -> tuple[str, FetchMode]:
-    return (url, mode)
+def generate_refid() -> str:
+    return uuid.uuid4().hex[:12]
 
 
-def get_cached_fetch(url: str, mode: FetchMode) -> Optional[Tuple[str, str]]:
-    entry = _FETCH_CACHE.get(_cache_key(url, mode))
+def _is_refid(value: str) -> bool:
+    return bool(_REFID_PATTERN.match(value))
+
+
+def get_cached_fetch_by_refid(refid: str) -> Optional[Tuple[str, str]]:
+    entry = _REFID_CACHE.get(refid)
     if entry is None:
         return None
-    timestamp, final_url, html = entry
-    if time.time() - timestamp > _FETCH_CACHE_TTL_SECONDS:
-        del _FETCH_CACHE[_cache_key(url, mode)]
+    timestamp, url, final_url, html = entry
+    if time.time() - timestamp > _REFID_CACHE_TTL_SECONDS:
+        del _REFID_CACHE[refid]
         return None
     return (final_url, html)
 
 
-def store_cached_fetch(url: str, mode: FetchMode, final_url: str, html: str) -> None:
-    if len(_FETCH_CACHE) >= _FETCH_CACHE_MAX_SIZE:
-        oldest_key = min(_FETCH_CACHE.keys(), key=lambda k: _FETCH_CACHE[k][0])
-        del _FETCH_CACHE[oldest_key]
-    _FETCH_CACHE[_cache_key(url, mode)] = (time.time(), final_url, html)
+def store_cached_fetch(url: str, mode: FetchMode, final_url: str, html: str) -> str:
+    refid = generate_refid()
+    if len(_REFID_CACHE) >= _REFID_CACHE_MAX_SIZE:
+        oldest_key = min(_REFID_CACHE.keys(), key=lambda k: _REFID_CACHE[k][0])
+        del _REFID_CACHE[oldest_key]
+    _REFID_CACHE[refid] = (time.time(), url, final_url, html)
+    return refid
 
 
 async def _wait_for_site_rate_limit(url: str) -> None:
@@ -107,6 +117,41 @@ async def _wait_for_site_rate_limit(url: str) -> None:
         await asyncio.sleep(wait_seconds)
 
 
+def _inject_auth_storage_cookies(session):
+    """如果 auth storage 文件存在，将其中 cookie 注入到 requests Session。"""
+    path = AUTH_STORAGE_STATE_PATH
+    if not path.exists():
+        return
+
+    import requests.cookies
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as exc:
+        logger.warning("[StaticFetch] 读取 auth storage 失败: %s", exc)
+        return
+
+    cookies = data.get("cookies", [])
+    if not cookies:
+        return
+
+    for c in cookies:
+        expires = c.get("expires")
+        if expires is not None and expires < 0:
+            expires = None
+        session.cookies.set(
+            c["name"],
+            c["value"],
+            domain=c.get("domain"),
+            path=c.get("path", "/"),
+            secure=c.get("secure", False),
+            expires=expires,
+            rest={"HttpOnly": c.get("httpOnly", False)},
+        )
+    logger.info("[StaticFetch] 已加载 %d 个 cookie (来源: %s)", len(cookies), path)
+
+
 def static_fetch(url: str, timeout: Optional[float] = None) -> FetchResult:
     effective_timeout = timeout if timeout is not None else FETCH_TIMEOUT_SECONDS
 
@@ -115,6 +160,8 @@ def static_fetch(url: str, timeout: Optional[float] = None) -> FetchResult:
             session.trust_env = False
             if USER_AGENT:
                 session.headers["User-Agent"] = USER_AGENT
+
+            _inject_auth_storage_cookies(session)
 
             response = session.get(
                 url,
@@ -324,7 +371,7 @@ async def dynamic_fetch(
 async def fetch_url(
     url: str,
     mode: FetchMode,
-    require_user_intervention: bool,
+    require_user_intervention: bool = False,
     min_stable_seconds: Optional[float] = None,
     early_exit_min_length: Optional[int] = None,
     timeout: Optional[float] = None,
