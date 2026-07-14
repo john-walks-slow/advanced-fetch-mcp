@@ -51,6 +51,7 @@
 | `elicit` | `object \| null` | `null` | Elicit 操作配置 |
 | `cursor` | `integer \| null` | `null` | 继续读取的偏移量。对 view 和 find 操作均有效。 |
 | `max_length` | `integer` | `20000` | 结果最大长度。 |
+| `output_to_file` | `string \| null` | `null` | 若指定，结果以 JSON 格式写入此文件路径而非直接返回，此时忽略 max_length。 |
 
 ### 二、`fetch` 对象
 

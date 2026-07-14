@@ -52,6 +52,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `elicit` | `object \| null` | `null` | Elicit operation configuration. |
 | `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. |
 | `max_length` | `integer` | `20000` | Maximum result length. |
+| `output_to_file` | `string \| null` | `null` | If set, writes the full result as JSON to this file path instead of returning it. max_length is ignored. |
 
 ### 2. `fetch` object
 

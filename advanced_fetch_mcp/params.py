@@ -119,6 +119,16 @@ CursorParam = Annotated[
         ),
     ),
 ]
+OutputToFileParam = Annotated[
+    Optional[str],
+    Field(
+        default=None,
+        description=schema_text(
+            "若指定，结果以 JSON 格式写入此文件路径而非直接返回，此时忽略 max_length。",
+            "If set, writes the full result as JSON to this file path instead of returning it. max_length is ignored.",
+        ),
+    ),
+]
 FindQueryParam = Annotated[
     str,
     Field(
@@ -305,6 +315,7 @@ class AdvancedFetchParams(BaseModel):
     elicit: ElicitParam
     cursor: CursorParam
     max_length: MaxLengthParam
+    output_to_file: OutputToFileParam
 
     def to_view_config(self) -> "ViewConfig":
         return ViewConfig(
