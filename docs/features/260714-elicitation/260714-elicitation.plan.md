@@ -46,7 +46,7 @@ if request.operation == "request_human_action":
         "即将打开浏览器，请完成登录/验证码等操作后关闭页面。"
     )
     # 也可以用 params 里预留的 message 参数让模型自定义
-    result = await ctx.elicit(message, response_type=bool)
+    result = await ctx.elicit(message, response_type=Literal["accept"])
     if isinstance(result, (DeclinedElicitation, CancelledElicitation)):
         return {"success": False, "error": "用户取消了手动操作"}, None
 ```

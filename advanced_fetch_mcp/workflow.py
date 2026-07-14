@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Tuple
+import time
+from typing import Any, Dict, Literal, Tuple
 
-from fastmcp.server.elicitation import (
-    AcceptedElicitation,
-    CancelledElicitation,
-    DeclinedElicitation,
-)
+from fastmcp.server.elicitation import AcceptedElicitation
 
 from .extract import continue_in_text, extract_links, render_view, search_in_text
 from .fetch import (
@@ -82,12 +79,15 @@ def _build_public_result(
     next_cursor: int | None = None,
     find_result: Dict[str, Any] | None = None,
     links_result: Dict[str, Any] | None = None,
+    duration_seconds: float | None = None,
 ) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "success": True,
         "final_url": fetch_result.final_url,
         "result": result_payload,
     }
+    if duration_seconds is not None:
+        result["duration_seconds"] = duration_seconds
     if refid is not None:
         result["refid"] = refid
     if fetch_result.timed_out:
@@ -126,6 +126,7 @@ async def execute_advanced_fetch(
     ctx: Any,
     request: AdvancedFetchParams,
 ) -> Tuple[Dict[str, Any], bytes | None]:
+    _t0 = time.monotonic()
     url = request.url
     is_elicit = request.operation == "elicit"
 
@@ -137,13 +138,17 @@ async def execute_advanced_fetch(
             )
             elicit_result = await ctx.elicit(
                 f"{elicit_message}\n\n目标网址：{url}",
-                response_type=bool,
+                response_type=Literal["accept"],
                 response_title="确认打开浏览器",
                 response_description="点击确认后将在可见浏览器中打开页面供您操作",
             )
             if not isinstance(elicit_result, AcceptedElicitation):
                 logger.info("[Elicit] 用户取消了操作（%s）", elicit_result.action)
-                return {"success": False, "error": "用户取消了手动操作"}, None
+                return {
+                    "success": False,
+                    "error": "用户取消了手动操作",
+                    "duration_seconds": time.monotonic() - _t0,
+                }, None
         except Exception as exc:
             logger.warning(
                 "[Elicit] 客户端不支持 elicitation，回退到直接打开浏览器: %s", exc
@@ -167,6 +172,7 @@ async def execute_advanced_fetch(
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
+            duration_seconds=time.monotonic() - _t0,
         ), None
 
     # with_screenshot requires fresh fetch (no refid cache)
@@ -233,6 +239,7 @@ async def execute_advanced_fetch(
             next_cursor=find_result.get("next_cursor"),
             find_result=find_result,
             links_result=links_result,
+            duration_seconds=time.monotonic() - _t0,
         ), fetch_result.screenshot
 
     if request.cursor is not None:
@@ -249,6 +256,7 @@ async def execute_advanced_fetch(
             truncated=continue_result.get("next_cursor") is not None,
             next_cursor=continue_result.get("next_cursor"),
             links_result=links_result,
+            duration_seconds=time.monotonic() - _t0,
         ), fetch_result.screenshot
 
     if request.operation == "sampling":
@@ -280,6 +288,7 @@ async def execute_advanced_fetch(
             refid=refid,
             truncated=truncated,
             links_result=links_result,
+            duration_seconds=time.monotonic() - _t0,
         ), fetch_result.screenshot
 
     view_result = continue_in_text(rendered, 0, request.view.max_length)
@@ -291,4 +300,5 @@ async def execute_advanced_fetch(
         truncated=view_result.get("next_cursor") is not None,
         next_cursor=view_result.get("next_cursor"),
         links_result=links_result,
+        duration_seconds=time.monotonic() - _t0,
     ), fetch_result.screenshot
