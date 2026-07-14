@@ -26,6 +26,7 @@ from .params import (
     ViewParam,
     schema_text,
 )
+from .fetch import _inject_auth_storage_cookies
 from .settings import IGNORE_SSL_ERRORS, USER_AGENT, get_requests_proxies, logger
 from .workflow import execute_advanced_fetch
 
@@ -237,17 +238,20 @@ async def read_image(
 
     for img_url in urls:
         try:
-            resp = requests.get(
-                img_url,
-                timeout=timeout,
-                headers={"User-Agent": USER_AGENT},
-                proxies=get_requests_proxies(img_url),
-                verify=not IGNORE_SSL_ERRORS,
-            )
-            resp.raise_for_status()
-            content_type = resp.headers.get("content-type", "image/png")
-            fmt = _infer_image_format(content_type)
-            results.append(Image(data=resp.content, format=fmt))
+            with requests.Session() as session:
+                session.trust_env = False
+                session.headers["User-Agent"] = USER_AGENT
+                _inject_auth_storage_cookies(session)
+                resp = session.get(
+                    img_url,
+                    timeout=timeout,
+                    proxies=get_requests_proxies(img_url),
+                    verify=not IGNORE_SSL_ERRORS,
+                )
+                resp.raise_for_status()
+                content_type = resp.headers.get("content-type", "image/png")
+                fmt = _infer_image_format(content_type)
+                results.append(Image(data=resp.content, format=fmt))
         except Exception as e:
             results.append(
                 TextContent(
@@ -308,22 +312,25 @@ async def download(
         os.makedirs(dir_path, exist_ok=True)
 
     try:
-        resp = requests.get(
-            url,
-            timeout=timeout,
-            headers={"User-Agent": USER_AGENT},
-            proxies=get_requests_proxies(url),
-            verify=not IGNORE_SSL_ERRORS,
-            stream=True,
-        )
-        resp.raise_for_status()
+        with requests.Session() as session:
+            session.trust_env = False
+            session.headers["User-Agent"] = USER_AGENT
+            _inject_auth_storage_cookies(session)
+            resp = session.get(
+                url,
+                timeout=timeout,
+                proxies=get_requests_proxies(url),
+                verify=not IGNORE_SSL_ERRORS,
+                stream=True,
+            )
+            resp.raise_for_status()
 
-        file_size = 0
-        with open(abs_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-                    file_size += len(chunk)
+            file_size = 0
+            with open(abs_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        file_size += len(chunk)
 
         return TextContent(
             type="text",

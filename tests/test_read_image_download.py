@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 from fastmcp.utilities.types import Image as FastMCPImage
 from mcp.types import TextContent
@@ -22,7 +22,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.server = self._import_server()
         self.ctx = MagicMock()
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_single_url_success(self, mock_get):
         """read_image with a single URL returns an ImageContent."""
         mock_resp = MagicMock()
@@ -41,12 +41,11 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         mock_get.assert_called_once_with(
             "https://example.com/image.png",
             timeout=30.0,
-            headers={"User-Agent": self.server.USER_AGENT},
             proxies=mock_get.call_args[1].get("proxies"),
             verify=mock_get.call_args[1].get("verify"),
         )
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_multiple_urls(self, mock_get):
         """read_image with multiple URLs returns multiple ImageContents."""
         mock_resp = MagicMock()
@@ -68,7 +67,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(r, FastMCPImage)
         self.assertEqual(mock_get.call_count, 2)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_url_failure_returns_text(self, mock_get):
         """When a URL fails, read_image returns a TextContent with error message."""
         mock_get.side_effect = Exception("Connection refused")
@@ -82,7 +81,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Connection refused", results[0].text)
         self.assertIn("bad.png", results[0].text)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_mixed_success_failure(self, mock_get):
         """Mixed success and failure URLs produce corresponding results."""
         good_resp = MagicMock()
@@ -107,7 +106,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(results[1], TextContent)
         self.assertIn("Not found", results[1].text)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_format_detection_jpeg(self, mock_get):
         """Content-Type image/jpeg infers format='jpeg'."""
         mock_resp = MagicMock()
@@ -123,7 +122,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         # FastMCP's Image stores format as _format internally
         self.assertEqual(results[0]._format, "jpeg")
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_empty_urls_list(self, mock_get):
         """Empty URL list returns an error TextContent."""
         results = await self.server.read_image(ctx=self.ctx, url=[])
@@ -133,7 +132,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("No URLs provided", results[0].text)
         mock_get.assert_not_called()
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_non_image_content_type(self, mock_get):
         """Non-image content types still create an Image with fallback format."""
         mock_resp = MagicMock()
@@ -151,7 +150,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         # Falls back to png
         self.assertEqual(results[0]._format, "png")
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_content_type_with_charset(self, mock_get):
         """Content-Type with charset is parsed correctly."""
         mock_resp = MagicMock()
@@ -168,7 +167,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(results[0], FastMCPImage)
         self.assertEqual(results[0]._format, "gif")
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_http_error_status(self, mock_get):
         """HTTP error status code returns a TextContent with error."""
         mock_resp = MagicMock()
@@ -183,7 +182,7 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(results[0], TextContent)
         self.assertIn("HTTP 404", results[0].text)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_custom_timeout(self, mock_get):
         """Custom timeout parameter is forwarded to requests."""
         mock_resp = MagicMock()
@@ -198,6 +197,8 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
 
         _, kwargs = mock_get.call_args
         self.assertEqual(kwargs["timeout"], 15.0)
+        # headers should not be in kwargs (set on session, not per-request)
+        self.assertNotIn("headers", kwargs)
 
 
 class DownloadTests(unittest.IsolatedAsyncioTestCase):
@@ -211,7 +212,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
         self.server = self._import_server()
         self.ctx = MagicMock()
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_download_success(self, mock_get):
         """Successful download returns success JSON with file info."""
         mock_resp = MagicMock()
@@ -244,7 +245,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_download_network_error(self, mock_get):
         """Network error returns error JSON."""
         mock_get.side_effect = Exception("Connection timeout")
@@ -268,7 +269,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_download_partial_file_cleanup(self, mock_get):
         """Failed download cleans up partial file."""
         mock_resp = MagicMock()
@@ -298,7 +299,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_download_file_exists_no_overwrite(self, mock_get):
         """Without overwrite, existing file returns error without downloading."""
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp:
@@ -329,7 +330,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
             nested_path = os.path.join(tmpdir, "nested", "sub", "file.bin")
 
             # Mock to avoid actual network call
-            with patch("advanced_fetch_mcp.server.requests.get") as mock_get:
+            with patch("advanced_fetch_mcp.server.requests.Session.get") as mock_get:
                 mock_resp = MagicMock()
                 mock_resp.headers = {"content-type": "application/octet-stream"}
                 mock_resp.raise_for_status = MagicMock()
@@ -350,7 +351,7 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
                 # Cleanup
                 os.unlink(nested_path)
 
-    @patch("advanced_fetch_mcp.server.requests.get")
+    @patch("advanced_fetch_mcp.server.requests.Session.get")
     async def test_download_file_exists_with_overwrite(self, mock_get):
         """With overwrite=true, existing file is overwritten."""
         mock_resp = MagicMock()
