@@ -1,7 +1,7 @@
 ## 模块地图
 
 - `params.py` — 参数模型定义：`AdvancedFetchParams`、各 operation 参数（`FindParams`、`SamplingParams`、`EvalParams`、`ElicitParams`）、`FetchConfig`、`ViewConfig` 等
-- `server.py` — FastMCP 服务入口，参数校验与路由
+- `server.py` — FastMCP 服务入口，参数校验与路由；含 `read_image` 和 `download` 两个独立工具
 - `workflow.py` — 核心编排：fetch → render → cache → return；含 elicit 四层降级逻辑
 - `fetch.py` — 页面获取：静态 HTTP 与 Playwright 动态；elicit 时强制 dynamic
 - `detection.py` — 页面检测（CAPTCHA/登录墙）+ 浏览器内 JS 轮询辅助（`wait_for_elicit_end` / `build_elicit_script`）
