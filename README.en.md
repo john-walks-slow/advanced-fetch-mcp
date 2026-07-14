@@ -15,6 +15,8 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
 - **Per-site rate limiting**: Configure `PER_SITE_RATE_LIMIT_SECONDS` to enforce a minimum interval between requests to the same hostname.
+- **Image fetching** (`read_image`): Pass image URL(s) and return them as MCP ImageContent directly, without going through the full web-fetch pipeline.
+- **File download** (`download`): Download a file from a URL to a local path, with streaming support for large files and automatic parent directory creation.
 
 ## MCP Client Configuration
 

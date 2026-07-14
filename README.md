@@ -14,6 +14,8 @@
 - **防止反爬**：同一 hostname 的请求限制最小间隔防止触发限流。包含 Playwright-Stealth，尽可能模仿真实请求防止被检测成机器人。
 - **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
 - **LLM Sampling**（实验性）：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp 等。
+- **图片获取**（`read_image`）：传入图片 URL 或 URL 列表，直接获取并返回为图片内容，无需走完整网页抓取流程。
+- **文件下载**（`download`）：从 URL 下载文件到本地指定路径，支持流式下载大文件，自动创建父目录。
 
 ## MCP Client 配置
 
@@ -319,6 +321,52 @@ url: https://private-site.com
 fetch:
   mode: dynamic
 ```
+
+## `read_image` — 获取图片
+
+独立工具，不依赖 `advanced_fetch`。
+
+```yaml
+# 单张图片
+read_image:
+  url: https://example.com/photo.png
+
+# 多张图片
+read_image:
+  url:
+    - https://example.com/photo1.png
+    - https://example.com/photo2.jpg
+```
+
+**参数**：
+
+| 参数 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `url` | `string \| string[]` | 必填 | 图片 URL，可传单个 URL 或 URL 列表。 |
+| `timeout` | `number` | `30` | 获取图片的超时秒数。 |
+
+**输出**：返回 `ImageContent` 列表（MCP 原生图片），失败时返回 `TextContent` 说明错误原因。单 URL 失败不影响其他 URL。
+
+## `download` — 下载文件
+
+独立工具，不依赖 `advanced_fetch`。
+
+```yaml
+download:
+  url: https://example.com/document.pdf
+  file_path: /path/to/save/document.pdf
+```
+
+**参数**：
+
+| 参数 | 类型 | 默认值 | 描述 |
+| :--- | :--- | :--- | :--- |
+| `url` | `string` | 必填 | 下载源 URL。 |
+| `file_path` | `string` | 必填 | 本地保存路径。自动创建父目录，自动解析为绝对路径。 |
+| `overwrite` | `boolean` | `false` | 若为 `false` 且文件已存在则报错；设为 `true` 覆盖已有文件。 |
+| `timeout` | `number` | `120` | 下载超时秒数。 |
+
+**输出**：成功时返回包含 `file_path`、`size`、`content_type` 的 JSON；失败时返回 `{success: false, error: ...}`。下载中断会自动清理残留文件。
 
 ## 会话模式
 
