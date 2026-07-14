@@ -50,6 +50,7 @@
 | `eval` | `object \| null` | `null` | Eval 操作配置 |
 | `cursor` | `integer \| null` | `null` | 继续读取的偏移量。对 view 和 find 操作均有效。 |
 | `max_length` | `integer` | `8000` | 结果最大长度。 |
+| `intervention_message` | `string \| null` | `null` | request_human_action 时，向用户展示的说明文字，解释需要用户做什么。 |
 
 ### 二、`fetch` 对象
 

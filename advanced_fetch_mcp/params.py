@@ -166,6 +166,16 @@ EvalScriptParam = Annotated[
         )
     ),
 ]
+InterventionMessageParam = Annotated[
+    Optional[str],
+    Field(
+        default=None,
+        description=schema_text(
+            "request_human_action 时，向用户展示的说明文字，解释需要用户做什么。",
+            "When operation=request_human_action, a message shown to the user explaining what action is needed.",
+        ),
+    ),
+]
 
 
 class FetchParams(BaseModel):
@@ -282,6 +292,7 @@ class AdvancedFetchParams(BaseModel):
     eval: EvalParam
     cursor: CursorParam
     max_length: MaxLengthParam
+    intervention_message: InterventionMessageParam
 
     def to_view_config(self) -> "ViewConfig":
         return ViewConfig(

@@ -131,10 +131,12 @@ async def execute_advanced_fetch(
 
     if require_intervention:
         try:
+            elicit_message = (
+                request.intervention_message
+                or "即将打开浏览器手动操作页面，请完成必要操作后关闭浏览器。"
+            )
             elicit_result = await ctx.elicit(
-                "即将打开浏览器手动操作页面。\n\n"
-                f"目标网址：{url}\n\n"
-                "请完成登录、验证码等必要操作后关闭浏览器页面。",
+                f"{elicit_message}\n\n目标网址：{url}",
                 response_type=bool,
                 response_title="确认打开浏览器",
                 response_description="点击确认后将在可见浏览器中打开页面供您操作",

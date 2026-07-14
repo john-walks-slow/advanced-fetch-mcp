@@ -14,6 +14,7 @@ from .params import (
     EvalParam,
     FetchParam,
     FindParam,
+    InterventionMessageParam,
     OperationParam,
     SamplingParam,
     UrlParam,
@@ -36,6 +37,7 @@ async def advanced_fetch(
     find: FindParam,
     sampling: SamplingParam,
     eval: EvalParam,
+    intervention_message: InterventionMessageParam = None,
 ) -> List[Union[TextContent, ImageContent]]:
     params_dict = {
         k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields

@@ -51,6 +51,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `eval` | `object \| null` | `null` | Eval operation configuration. |
 | `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. |
 | `max_length` | `integer` | `8000` | Maximum result length. |
+| `intervention_message` | `string \| null` | `null` | When operation=request_human_action, a message shown to the user explaining what action is needed. |
 
 ### 2. `fetch` object
 

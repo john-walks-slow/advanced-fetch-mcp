@@ -1,6 +1,12 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from fastmcp.server.elicitation import (
+    AcceptedElicitation,
+    CancelledElicitation,
+    DeclinedElicitation,
+)
+
 from advanced_fetch_mcp.fetch import FetchResult
 from advanced_fetch_mcp.params import AdvancedFetchParams
 from advanced_fetch_mcp.settings import MAX_FIND_MATCHES
@@ -345,6 +351,112 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         ):
             result, _ = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(result["intervention_ended_by"], "user_marked_ready")
+
+    async def test_request_human_action_elicit_accepted_proceeds(self):
+        """用户确认 elicit → 继续打开浏览器，正常返回"""
+        mock_ctx = AsyncMock()
+        mock_ctx.elicit = AsyncMock(
+            return_value=AcceptedElicitation[bool](data=True)
+        )
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="request_human_action",
+            fetch={"mode": "dynamic"},
+        )
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>Hello</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.render_view",
+                return_value="Hello",
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.store_cached_fetch",
+                return_value=MOCK_REFID,
+            ),
+        ):
+            result, _ = await execute_advanced_fetch(ctx=mock_ctx, request=request)
+        mock_ctx.elicit.assert_awaited_once()
+        self.assertEqual(result["result"], "Hello")
+        self.assertEqual(result["final_url"], "https://example.com/final")
+
+    async def test_request_human_action_elicit_declined_returns_error(self):
+        """用户拒绝 elicit → 返回 error，不打开浏览器"""
+        mock_ctx = AsyncMock()
+        mock_ctx.elicit = AsyncMock(return_value=DeclinedElicitation())
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="request_human_action",
+            fetch={"mode": "dynamic"},
+        )
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(),
+            ),
+        ):
+            result, _ = await execute_advanced_fetch(ctx=mock_ctx, request=request)
+        mock_ctx.elicit.assert_awaited_once()
+        self.assertFalse(result["success"])
+        self.assertIn("取消", result["error"])
+
+    async def test_request_human_action_elicit_cancelled_returns_error(self):
+        """用户取消 elicit → 返回 error，不打开浏览器"""
+        mock_ctx = AsyncMock()
+        mock_ctx.elicit = AsyncMock(return_value=CancelledElicitation())
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="request_human_action",
+            fetch={"mode": "dynamic"},
+        )
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(),
+            ),
+        ):
+            result, _ = await execute_advanced_fetch(ctx=mock_ctx, request=request)
+        mock_ctx.elicit.assert_awaited_once()
+        self.assertFalse(result["success"])
+        self.assertIn("取消", result["error"])
+
+    async def test_request_human_action_elicit_not_supported_falls_back(self):
+        """客户端不支持 elicit → fallback，直接开浏览器（原有行为）"""
+        # ctx=object() 没有 elicit 方法，会触发 except 回退
+        request = AdvancedFetchParams(
+            url="https://example.com",
+            operation="request_human_action",
+            fetch={"mode": "dynamic"},
+        )
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>fallback ok</main>",
+                        final_url="https://example.com/final",
+                    )
+                ),
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.render_view",
+                return_value="fallback ok",
+            ),
+            patch(
+                "advanced_fetch_mcp.workflow.store_cached_fetch",
+                return_value=MOCK_REFID,
+            ),
+        ):
+            result, _ = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertEqual(result["result"], "fallback ok")
+        self.assertEqual(result["final_url"], "https://example.com/final")
 
     async def test_eval_object_is_json_stringified(self):
         request = AdvancedFetchParams(
