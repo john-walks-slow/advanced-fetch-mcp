@@ -14,7 +14,7 @@
 - **防止反爬**：同一 hostname 的请求限制最小间隔防止触发限流。包含 Playwright-Stealth，尽可能模仿真实请求防止被检测成机器人。
 - **代理支持**：支持 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`
 - **LLM Sampling**（实验性）：通过 `sampling.prompt` 对网页内容进行提炼，返回精简结果。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp 等。
-- **图片读取和资源下载**：通过 `read_image` 直接获取图片并以 MCP ImageContent 返回；通过 `download` 将文件下载到本地路径。
+- **网络图片读取和资源下载**：通过 `read_image` 多模态读取网络图片；通过 `download` 将网络文件下载到本地路径。
 
 ## MCP Client 配置
 
