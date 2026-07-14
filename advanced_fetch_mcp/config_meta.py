@@ -69,7 +69,7 @@ ENV_VAR_SPECS: tuple[EnvVarSpec, ...] = (
         "Number of leading and trailing characters compared during stability detection.",
         example_comment="Edge chars to compare for stability (default: 200)",
     ),
-    EnvVarSpec("DEFAULT_MAX_LENGTH", "8000", "extraction", "默认返回长度上限。", "Default max output length."),
+    EnvVarSpec("DEFAULT_MAX_LENGTH", "20000", "extraction", "默认返回长度上限。", "Default max output length."),
     EnvVarSpec(
         "ENABLE_PROMPT_EXTRACTION",
         "false",

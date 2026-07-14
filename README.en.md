@@ -51,7 +51,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | `eval` | `object \| null` | `null` | Eval operation configuration. |
 | `elicit` | `object \| null` | `null` | Elicit operation configuration. |
 | `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. |
-| `max_length` | `integer` | `8000` | Maximum result length. |
+| `max_length` | `integer` | `20000` | Maximum result length. |
 
 ### 2. `fetch` object
 
@@ -67,7 +67,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | :--- | :--- | :--- | :--- |
 | `view.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
 | `view.markdown_engine` | `"article" \| "full"` | `"article"` | Markdown extraction engine. article uses trafilatura for article main content; full uses markdownify for the full page. |
-| `view.max_length` | `integer` | `8000` | Maximum result length. |
+| `view.max_length` | `integer` | `20000` | Maximum result length. |
 | `view.links` | `boolean` | `true` | Whether to extract all links from the page. |
 | `view.with_screenshot` | `boolean` | `false` | Whether to capture a screenshot of the page. Forces dynamic mode and captures the initial viewport as a base64-encoded PNG. |
 
@@ -346,7 +346,7 @@ Each fetch result generates a `refid`. Pass the `refid` directly as the `url` in
 
 ### Extraction / LLM
 
-- `DEFAULT_MAX_LENGTH`: Default max output length. Default: `8000`.
+- `DEFAULT_MAX_LENGTH`: Default max output length. Default: `20000`.
 - `ENABLE_PROMPT_EXTRACTION`: Whether `sampling` is enabled. Default: `false`. Experimental feature. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 - `PROMPT_INPUT_MAX_CHARS`: Max input size passed to the LLM. Default: `64000`.
 - `MAX_FIND_MATCHES`: Maximum number of page-search matches to return. Default: `12`.

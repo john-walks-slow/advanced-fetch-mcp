@@ -50,7 +50,7 @@
 | `eval` | `object \| null` | `null` | Eval 操作配置 |
 | `elicit` | `object \| null` | `null` | Elicit 操作配置 |
 | `cursor` | `integer \| null` | `null` | 继续读取的偏移量。对 view 和 find 操作均有效。 |
-| `max_length` | `integer` | `8000` | 结果最大长度。 |
+| `max_length` | `integer` | `20000` | 结果最大长度。 |
 
 ### 二、`fetch` 对象
 
@@ -66,7 +66,7 @@
 | :--- | :--- | :--- | :--- |
 | `view.output_format` | `"markdown" \| "html"` | `"markdown"` | 正文输出格式。 |
 | `view.markdown_engine` | `"article" \| "full"` | `"article"` | markdown 提取引擎。article 用 trafilatura 提取文章正文；full 用 markdownify 提取完整页面。 |
-| `view.max_length` | `integer` | `8000` | 结果最大长度。 |
+| `view.max_length` | `integer` | `20000` | 结果最大长度。 |
 | `view.links` | `boolean` | `true` | 是否提取页面中的出链。 |
 | `view.with_screenshot` | `boolean` | `false` | 是否截图。自动使用 dynamic 模式获取页面并截取首屏，返回 base64 编码的 PNG。 |
 
@@ -348,7 +348,7 @@ fetch:
 
 ### 提取 / LLM
 
-- `DEFAULT_MAX_LENGTH`：默认返回长度上限。默认 `8000`。
+- `DEFAULT_MAX_LENGTH`：默认返回长度上限。默认 `20000`。
 - `ENABLE_PROMPT_EXTRACTION`：是否启用 `sampling`。默认 `false`。 实验性功能。支持 sampling 的客户端包括 VS Code GitHub Copilot、goose、Amp、Glama、Joey、fast-agent、mcp-use、Postman 等。
 - `PROMPT_INPUT_MAX_CHARS`：传给 LLM 的最大输入字符数。默认 `64000`。
 - `MAX_FIND_MATCHES`：页内搜索最多返回多少条命中。默认 `12`。
