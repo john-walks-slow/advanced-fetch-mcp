@@ -31,7 +31,7 @@ UrlParam = Annotated[
     Field(
         description=schema_text(
             "目标网页的完整 URL 或之前结果的引用 ID（复用抓取结果）。",
-            "Full URL of the target webpage.",
+            "Full URL of the target webpage, or a refid to reuse a previous fetch result.",
         )
     ),
 ]
@@ -41,7 +41,7 @@ OperationParam = Annotated[
         default="view",
         description=schema_text(
             "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作网站（当且仅当被 captcha / 登录墙阻拦时使用。鉴权信息会保存下来。）。",
-            "Operation: view, in-page search, LLM extraction, JS execution, or manual intervention.",
+            "Operation: view, in-page search, LLM extraction, JS execution, or request manual intervention (use only when blocked by captcha/login wall; auth info is saved).",
         ),
     ),
 ]
@@ -51,7 +51,7 @@ FetchModeParam = Annotated[
         default="static",
         description=schema_text(
             "抓取方式：dynamic=浏览器，static=request。自动复用鉴权信息。",
-            "Fetch mode: dynamic uses a browser; static requests source HTML directly.",
+            "Fetch mode: dynamic uses a browser; static requests source HTML directly. Auth info is automatically reused.",
         ),
     ),
 ]
@@ -97,16 +97,6 @@ MarkdownEngineParam = Annotated[
         ),
     ),
 ]
-RenderImagesParam = Annotated[
-    bool,
-    Field(
-        default=False,
-        description=schema_text(
-            "是否在结果中嵌入图片。true 时下载图片并转为 base64 data URI 嵌入 markdown；false 时仅保留 alt 文本。",
-            "Whether to embed images in the result. When true, downloads images and embeds them as base64 data URIs in markdown; when false, keeps only alt text.",
-        ),
-    ),
-]
 MaxLengthParam = Annotated[
     int,
     Field(
@@ -125,7 +115,7 @@ CursorParam = Annotated[
         ge=0,
         description=schema_text(
             "继续读取的偏移量。对 view 和 find 操作均有效。",
-            "Continue-read offset. Valid for both view and find operations. Use the next_cursor value from the previous response.",
+            "Continue-read offset. Valid for both view and find operations.",
         ),
     ),
 ]
@@ -191,13 +181,19 @@ class ViewParams(BaseModel):
 
     output_format: OutputFormatParam
     markdown_engine: MarkdownEngineParam
-    render_images: RenderImagesParam
     max_length: MaxLengthParam
     links: bool = Field(
         default=True,
         description=schema_text(
             "是否提取页面中的出链。",
-            "Whether to extract all links from the page. When true, the response includes a links field.",
+            "Whether to extract all links from the page.",
+        ),
+    )
+    with_screenshot: bool = Field(
+        default=False,
+        description=schema_text(
+            "是否截图。自动使用 dynamic 模式获取页面并截取首屏，返回 base64 编码的 PNG。",
+            "Whether to capture a screenshot of the page. Forces dynamic mode and captures the initial viewport as a base64-encoded PNG.",
         ),
     )
 
@@ -238,7 +234,7 @@ ViewParam = Annotated[
         default_factory=ViewParams,
         description=schema_text(
             "View 操作配置",
-            "View extraction, output-format, image embedding, result length, and continue-read configuration.",
+            "View operation configuration.",
         ),
     ),
 ]
@@ -248,7 +244,7 @@ FindParam = Annotated[
         default=None,
         description=schema_text(
             "Find 操作配置",
-            "Find configuration. Provide only when operation=\"find\".",
+            "Find operation configuration.",
         ),
     ),
 ]
@@ -258,7 +254,7 @@ SamplingParam = Annotated[
         default=None,
         description=schema_text(
             "Sampling 操作配置",
-            "Sampling configuration. Provide only when operation=\"sampling\".",
+            "Sampling operation configuration.",
         ),
     ),
 ]
@@ -268,7 +264,7 @@ EvalParam = Annotated[
         default=None,
         description=schema_text(
             "Eval 操作配置",
-            "Script configuration. Provide only when operation=\"eval\".",
+            "Eval operation configuration.",
         ),
     ),
 ]
@@ -279,19 +275,18 @@ class AdvancedFetchParams(BaseModel):
 
     url: UrlParam
     operation: OperationParam
-    cursor: CursorParam
     fetch: FetchParam
     view: ViewParam
-    max_length: MaxLengthParam
     find: FindParam
     sampling: SamplingParam
     eval: EvalParam
+    cursor: CursorParam
+    max_length: MaxLengthParam
 
     def to_view_config(self) -> "ViewConfig":
         return ViewConfig(
             output_format=self.view.output_format,
             markdown_engine=self.view.markdown_engine,
-            render_images=self.view.render_images,
         )
 
     @model_validator(mode="after")
@@ -364,10 +359,19 @@ class AdvancedFetchParams(BaseModel):
                 )
             )
 
+        if self.view.with_screenshot:
+            if self.operation != "view":
+                raise ValueError(
+                    schema_error(
+                        "with_screenshot 仅对 view 操作有效。",
+                        "with_screenshot is only valid for view operations.",
+                    )
+                )
+            self.fetch.mode = "dynamic"
+
         return self
 
 
 class ViewConfig(BaseModel):
     output_format: OutputFormatParam
     markdown_engine: MarkdownEngineParam
-    render_images: RenderImagesParam

@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-import base64
 import re
 from typing import Any, Dict
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin
 
-import requests
 import trafilatura
 from lxml import html as lxml_html
 from markdownify import markdownify
 
 from .params import ViewConfig
 from .settings import FIND_SNIPPET_MAX_CHARS, MAX_FIND_MATCHES, MAX_LINKS_COUNT, logger
+from .url_utils import (
+    is_skipped_href,
+    make_relative_url,
+    normalize_html_urls,
+    normalize_markdown_urls,
+)
 
 MatchSummary = Dict[str, str]
-
-_IMAGE_MAX_SIZE = 5 * 1024 * 1024  # 5MB
-_IMAGE_DOWNLOAD_TIMEOUT = 10
-
 
 def _normalize_html_input(html: str | None) -> str:
     return "" if html is None else html
@@ -65,78 +65,7 @@ def _unwrap_nodes(target, xpath: str) -> None:
             continue
 
 
-def _download_image_as_base64(img_url: str) -> tuple[str | None, str | None]:
-    """Download image and return (base64_data, mime_type) or (None, None) on failure."""
-    try:
-        resp = requests.get(img_url, timeout=_IMAGE_DOWNLOAD_TIMEOUT, stream=True)
-        resp.raise_for_status()
-        content_type = resp.headers.get("Content-Type", "image/png")
-        data = resp.content
-        if len(data) > _IMAGE_MAX_SIZE:
-            logger.warning("Image too large (%d bytes), skipping: %s", len(data), img_url)
-            return None, None
-        b64 = base64.b64encode(data).decode("ascii")
-        return b64, content_type
-    except Exception as exc:
-        logger.warning("Failed to download image %s: %s", img_url, exc)
-        return None, None
-
-
-def _collect_images_from_html(html: str, base_url: str | None) -> list[dict[str, Any]]:
-    """Collect all img tags with src, alt, and optional figure caption."""
-    try:
-        doc = lxml_html.fromstring(html)
-    except Exception:
-        return []
-
-    images: list[dict[str, Any]] = []
-    for img in doc.xpath(".//img"):
-        src = img.get("src", "").strip()
-        if not src:
-            continue
-        if base_url:
-            src = urljoin(base_url, src)
-        alt = img.get("alt", "").strip()
-
-        # Look for figure/figcaption
-        caption = ""
-        parent = img.getparent()
-        if parent is not None and parent.tag == "a":
-            parent = parent.getparent()
-        if parent is not None and parent.tag == "figure":
-            figcap = parent.findtext(".//figcaption", "").strip()
-            if figcap:
-                caption = figcap
-
-        images.append({"src": src, "alt": alt, "caption": caption or alt})
-
-    return images
-
-
-def _strip_images_from_html(html: str) -> str:
-    """Remove img/picture/source/svg/canvas, keep alt text as inline text."""
-    try:
-        root = lxml_html.fromstring(html)
-    except Exception:
-        return re.sub(r"<img[^>]*>", "", html, flags=re.IGNORECASE)
-
-    for img in root.xpath(".//img"):
-        alt = (img.get("alt") or "").strip()
-        parent = img.getparent()
-        if parent is not None:
-            if alt:
-                # Replace img with its alt text
-                parent.replace(img, lxml_html.Element("span"))
-                # Set text content
-                img.getparent().text = f"[{alt}]"
-            else:
-                parent.remove(img)
-
-    _remove_nodes(root, ".//picture | .//source | .//svg | .//canvas")
-    return lxml_html.tostring(root, encoding="unicode", method="html")
-
-
-def _render_full_view(html: str, output_format: str, render_images: bool) -> str:
+def _render_full_view(html: str, output_format: str) -> str:
     """Render full page content using markdownify."""
     body = _extract_body_node(html)
     if body is None:
@@ -144,9 +73,6 @@ def _render_full_view(html: str, output_format: str, render_images: bool) -> str
 
     # Remove script/style/noscript/template
     _remove_nodes(body, ".//script | .//style | .//noscript | .//template")
-
-    if not render_images:
-        _remove_nodes(body, ".//img | .//picture | .//source | .//svg | .//canvas")
 
     body_html = lxml_html.tostring(body, encoding="unicode", method="html")
 
@@ -159,13 +85,13 @@ def _render_full_view(html: str, output_format: str, render_images: bool) -> str
         return _extract_body_text(body_html) or trafilatura.html2txt(body_html) or ""
 
 
-def _render_article_view(html: str, output_format: str, render_images: bool) -> str:
+def _render_article_view(html: str, output_format: str) -> str:
     """Render article main content using trafilatura."""
     kwargs: dict[str, Any] = {
         "output_format": output_format,
         "include_comments": False,
         "include_tables": True,
-        "include_images": render_images,
+        "include_images": True,
         "include_links": True,
         "include_formatting": output_format == "markdown",
         "deduplicate": True,
@@ -196,41 +122,6 @@ def _render_article_view(html: str, output_format: str, render_images: bool) -> 
     return fallback_text or ""
 
 
-def _embed_images_in_result(
-    result: str,
-    original_html: str,
-    base_url: str | None,
-    output_format: str,
-) -> str:
-    """Download images and embed as base64 data URIs in the rendered result."""
-    images = _collect_images_from_html(original_html, base_url)
-    if not images:
-        return result
-
-    # Build a mapping: original URL → data URI
-    uri_map: dict[str, str] = {}
-    for img in images:
-        if img["src"] in uri_map:
-            continue
-        b64, mime = _download_image_as_base64(img["src"])
-        if b64:
-            uri_map[img["src"]] = f"data:{mime};base64,{b64}"
-        else:
-            uri_map[img["src"]] = img["src"]  # keep original on failure
-
-    if output_format == "markdown":
-        # Replace ![alt](url) patterns
-        def _replace_md(match: re.Match[str]) -> str:
-            alt = match.group(1)
-            url = match.group(2).strip()
-            resolved = uri_map.get(url, url)
-            return f"![{alt}]({resolved})"
-
-        result = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", _replace_md, result)
-
-    return result
-
-
 def render_view(
     html: str,
     view_config: ViewConfig,
@@ -254,12 +145,16 @@ def render_view(
     output_format = view_config.output_format
 
     if engine == "full":
-        result = _render_full_view(html, output_format, view_config.render_images)
+        result = _render_full_view(html, output_format)
     else:
-        result = _render_article_view(html, output_format, view_config.render_images)
+        result = _render_article_view(html, output_format)
 
-    if view_config.render_images and result:
-        result = _embed_images_in_result(result, html, base_url, output_format)
+    # Normalize same-origin URLs to relative in the rendered output
+    if base_url:
+        if output_format == "html":
+            result = normalize_html_urls(result, base_url)
+        elif output_format == "markdown":
+            result = normalize_markdown_urls(result, base_url)
 
     return result
 
@@ -405,33 +300,6 @@ def continue_in_text(full_text: str, cursor: int, max_length: int) -> Dict[str, 
     }
 
 
-_SKIPPED_PROTOCOLS = {"javascript:", "mailto:", "tel:", "data:", "sms:", "fax:", "file:"}
-
-
-def _is_skipped_href(href: str) -> bool:
-    """Check if this href should be skipped (non-http protocols or fragment-only)."""
-    stripped = href.strip()
-    if not stripped:
-        return True
-    if stripped.startswith("#"):
-        return True
-    lower = stripped.lower()
-    for proto in _SKIPPED_PROTOCOLS:
-        if lower.startswith(proto):
-            return True
-    return False
-
-
-def _make_relative_href(url: str, base: str) -> str:
-    """If url is same-origin as base, return a path-relative href; otherwise return absolute."""
-    u = urlparse(url)
-    b = urlparse(base)
-    if u.scheme == b.scheme and u.netloc == b.netloc:
-        result = urlunparse(("", "", u.path, u.params, u.query, u.fragment))
-        return result or "/"
-    return url
-
-
 def _get_link_text(a_node) -> str:
     """Get the visible text for a link anchor.
 
@@ -476,7 +344,7 @@ def extract_links(
 
     for a in body.xpath(".//a[@href]"):
         raw_href = a.get("href", "").strip()
-        if _is_skipped_href(raw_href):
+        if is_skipped_href(raw_href):
             continue
 
         abs_url = urljoin(base, raw_href)
@@ -484,12 +352,13 @@ def extract_links(
             continue
         seen_abs.add(abs_url)
 
-        # Filter: if abs_url appears in rendered text, skip
-        if abs_url in rendered_text:
+        href = make_relative_url(abs_url, base) if base else abs_url
+
+        # Filter: if the link appears in rendered text (in either absolute or relative form), skip
+        if abs_url in rendered_text or (href != abs_url and href in rendered_text):
             continue
 
         text = _get_link_text(a)
-        href = _make_relative_href(abs_url, base) if base else abs_url
 
         collected.append({
             "href": href,

@@ -3,6 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Tuple
 
+from fastmcp.server.elicitation import (
+    AcceptedElicitation,
+    CancelledElicitation,
+    DeclinedElicitation,
+)
+
 from .extract import continue_in_text, extract_links, render_view, search_in_text
 from .fetch import (
     FetchResult,
@@ -12,7 +18,7 @@ from .fetch import (
     get_cached_fetch_by_refid,
     store_cached_fetch,
 )
-from .params import AdvancedFetchParams
+from .params import AdvancedFetchParams, schema_error
 from .sampling import run_prompt_extraction
 from .settings import MAX_FIND_MATCHES, MAX_LINKS_COUNT, logger
 
@@ -119,9 +125,27 @@ async def execute_advanced_fetch(
     *,
     ctx: Any,
     request: AdvancedFetchParams,
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], bytes | None]:
     url = request.url
     require_intervention = request.operation == "request_human_action"
+
+    if require_intervention:
+        try:
+            elicit_result = await ctx.elicit(
+                "即将打开浏览器手动操作页面。\n\n"
+                f"目标网址：{url}\n\n"
+                "请完成登录、验证码等必要操作后关闭浏览器页面。",
+                response_type=bool,
+                response_title="确认打开浏览器",
+                response_description="点击确认后将在可见浏览器中打开页面供您操作",
+            )
+            if not isinstance(elicit_result, AcceptedElicitation):
+                logger.info("[Elicit] 用户取消了 request_human_action（%s）", elicit_result.action)
+                return {"success": False, "error": "用户取消了手动操作"}, None
+        except Exception as exc:
+            logger.warning(
+                "[Elicit] 客户端不支持 elicitation，回退到直接打开浏览器: %s", exc
+            )
 
     if request.operation == "eval":
         eval_result = await evaluate_script_on_page(
@@ -141,10 +165,17 @@ async def execute_advanced_fetch(
             result_payload=result_text,
             warnings=warnings,
             truncated=truncated,
-        )
+        ), None
 
-    # Check if url is a refid for cache reuse
-    if _is_refid(url):
+    # with_screenshot requires fresh fetch (no refid cache)
+    if _is_refid(url) and request.view.with_screenshot:
+        raise ValueError(
+            schema_error(
+                "截图不支持 refid 缓存，请使用原始 URL。",
+                "Screenshot is not supported with refid cache. Use the original URL.",
+            )
+        )
+    elif _is_refid(url):
         cached = get_cached_fetch_by_refid(url)
         if cached is not None:
             final_url, html = cached
@@ -162,6 +193,7 @@ async def execute_advanced_fetch(
             require_intervention,
             request.fetch.min_stable_seconds,
             request.fetch.timeout,
+            with_screenshot=request.view.with_screenshot,
         )
         refid = store_cached_fetch(
             url, request.fetch.mode, fetch_result.final_url, fetch_result.html
@@ -199,7 +231,7 @@ async def execute_advanced_fetch(
             next_cursor=find_result.get("next_cursor"),
             find_result=find_result,
             links_result=links_result,
-        )
+        ), fetch_result.screenshot
 
     if request.cursor is not None:
         continue_result = continue_in_text(
@@ -215,7 +247,7 @@ async def execute_advanced_fetch(
             truncated=continue_result.get("next_cursor") is not None,
             next_cursor=continue_result.get("next_cursor"),
             links_result=links_result,
-        )
+        ), fetch_result.screenshot
 
     if request.operation == "sampling":
         try:
@@ -246,7 +278,7 @@ async def execute_advanced_fetch(
             refid=refid,
             truncated=truncated,
             links_result=links_result,
-        )
+        ), fetch_result.screenshot
 
     view_result = continue_in_text(rendered, 0, request.view.max_length)
     return _build_public_result(
@@ -257,4 +289,4 @@ async def execute_advanced_fetch(
         truncated=view_result.get("next_cursor") is not None,
         next_cursor=view_result.get("next_cursor"),
         links_result=links_result,
-    )
+    ), fetch_result.screenshot

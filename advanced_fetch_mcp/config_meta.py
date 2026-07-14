@@ -131,8 +131,8 @@ ENV_VAR_SPECS: tuple[EnvVarSpec, ...] = (
         note_en="Leave empty to use the system default.",
     ),
     EnvVarSpec("BROWSER_COLOR_SCHEME", "light", "browser", "颜色方案。", "Color scheme."),
-    EnvVarSpec("BROWSER_VIEWPORT_WIDTH", "1366", "browser", "viewport 宽度。", "Viewport width."),
-    EnvVarSpec("BROWSER_VIEWPORT_HEIGHT", "768", "browser", "viewport 高度。", "Viewport height."),
+    EnvVarSpec("BROWSER_VIEWPORT_WIDTH", "1440", "browser", "viewport 宽度。", "Viewport width."),
+    EnvVarSpec("BROWSER_VIEWPORT_HEIGHT", "900", "browser", "viewport 高度。", "Viewport height."),
     EnvVarSpec("ENABLE_AUTH_STEALTH", "true", "browser", "是否在 `auth` 模式启用 stealth。", "Whether to enable stealth in `auth` mode."),
     EnvVarSpec(
         "INTERVENTION_TIMEOUT_SECONDS",

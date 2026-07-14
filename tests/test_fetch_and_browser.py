@@ -108,7 +108,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
     def test_static_fetch_returns_empty_on_connection_error(self):
         from advanced_fetch_mcp.fetch import static_fetch
 
-        result = static_fetch("https://invalid.nonexistent.tld/page", timeout=0.5)
+        result = static_fetch("http://127.0.0.1:1/", timeout=0.5)
         self.assertFalse(result.timed_out)
         self.assertIsNone(result.timeout_stage)
         self.assertEqual(result.html, "")

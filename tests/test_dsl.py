@@ -20,7 +20,6 @@ class DSLTests(unittest.TestCase):
         self.assertEqual(request.fetch.min_stable_seconds, AUTO_WAIT_MIN_STABLE_SECONDS)
         self.assertEqual(request.view.output_format, "markdown")
         self.assertEqual(request.view.markdown_engine, "article")
-        self.assertFalse(request.view.render_images)
         self.assertTrue(request.view.links)
         self.assertEqual(request.max_length, DEFAULT_MAX_LENGTH)
         self.assertIsNone(request.cursor)
@@ -85,7 +84,6 @@ class DSLTests(unittest.TestCase):
             view={
                 "output_format": "html",
                 "markdown_engine": "full",
-                "render_images": True,
             },
         )
         cfg = request.to_view_config()

@@ -38,18 +38,6 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("Link", result)
         self.assertNotIn("<title>", result)
 
-    def test_render_full_strips_images_when_disabled(self):
-        html = "<html><body><img src='photo.jpg' alt='Photo'><p>Text</p></body></html>"
-        view = ViewConfig(output_format="markdown", markdown_engine="full", render_images=False)
-        result = render_view(html, view)
-        self.assertIn("Text", result)
-
-    def test_render_article_strips_images_when_disabled(self):
-        html = "<html><body><img src='photo.jpg' alt='Photo'><p>Text</p></body></html>"
-        view = ViewConfig(output_format="markdown", markdown_engine="article", render_images=False)
-        result = render_view(html, view)
-        self.assertIn("Text", result)
-
     def test_search_returns_match_cursor(self):
         result = search_in_text("a refund b refund c", "refund", False)
         self.assertEqual(result["matches_total"], 2)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict
+import json
+from typing import List, Union
 
 from fastmcp import Context, FastMCP
+from fastmcp.utilities.types import Image
+from mcp.types import ImageContent, TextContent
 
 from .browser import browser_manager
 from .params import (
@@ -33,12 +36,19 @@ async def advanced_fetch(
     find: FindParam,
     sampling: SamplingParam,
     eval: EvalParam,
-) -> Dict[str, Any]:
+) -> List[Union[TextContent, ImageContent]]:
     params_dict = {
         k: v for k, v in locals().items() if k in AdvancedFetchParams.model_fields
     }
     request = AdvancedFetchParams.model_validate(params_dict)
-    return await execute_advanced_fetch(ctx=ctx, request=request)
+    result_dict, screenshot_bytes = await execute_advanced_fetch(ctx=ctx, request=request)
+
+    blocks: List[Union[TextContent, ImageContent]] = [
+        TextContent(type="text", text=json.dumps(result_dict, ensure_ascii=False, indent=2))
+    ]
+    if screenshot_bytes:
+        blocks.append(Image(data=screenshot_bytes, format="png"))
+    return blocks
 
 
 advanced_fetch.__doc__ = schema_text(

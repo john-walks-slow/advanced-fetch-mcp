@@ -20,3 +20,12 @@
 
 - `extract_links()` 从原始 HTML 解析 `<a href>`，不依赖渲染引擎输出。渲染正文仅用于去重（排除已在正文中显示的链接）。
 - 同源链接自动转为相对路径，跨域保持绝对路径。`abs_url` 始终为完整 URL。
+
+## URL 相对化（url_utils）
+
+- 所有 URL 相对化逻辑集中在 `advanced_fetch_mcp/url_utils.py`。
+- 渲染输出（`render_view()`）末尾自动对同源 URL 做相对化：markdown 输出用 `normalize_markdown_urls()`，HTML 输出用 `normalize_html_urls()`。
+- `extract_links()` 的 `href` 字段也是通过 `url_utils.make_relative_url()` 生成的。
+- 处理范围：`<img src/srcset>`、`<a href>`、`<video src>`、`<audio src>`、`<source src>`、`<iframe src>`、`<link href>`。
+- 域名比较不区分大小写（`netloc.lower()`）。
+- 已知限制：不处理 protocol-relative URL（`//example.com/path`），Markdown URL 正则不支持含 `)` 的 URL。

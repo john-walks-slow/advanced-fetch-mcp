@@ -42,21 +42,21 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `url` | `string` | Required | Full URL of the target webpage. |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or manual intervention. |
-| `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. Use the next_cursor value from the previous response. |
+| `url` | `string` | Required | Full URL of the target webpage, or a refid to reuse a previous fetch result. |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or request manual intervention (use only when blocked by captcha/login wall; auth info is saved). |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
-| `view` | `object` | See below | View extraction, output-format, image embedding, result length, and continue-read configuration. |
+| `view` | `object` | See below | View operation configuration. |
+| `find` | `object \| null` | `null` | Find operation configuration. |
+| `sampling` | `object \| null` | `null` | Sampling operation configuration. |
+| `eval` | `object \| null` | `null` | Eval operation configuration. |
+| `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. |
 | `max_length` | `integer` | `8000` | Maximum result length. |
-| `find` | `object \| null` | `null` | Find configuration. Provide only when operation="find". |
-| `sampling` | `object \| null` | `null` | Sampling configuration. Provide only when operation="sampling". |
-| `eval` | `object \| null` | `null` | Script configuration. Provide only when operation="eval". |
 
 ### 2. `fetch` object
 
 | Path | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `fetch.mode` | `"dynamic" \| "static"` | `"static"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. |
+| `fetch.mode` | `"dynamic" \| "static"` | `"static"` | Fetch mode: dynamic uses a browser; static requests source HTML directly. Auth info is automatically reused. |
 | `fetch.min_stable_seconds` | `number` | `3.0` | Minimum stable duration in seconds for dynamic fetch. |
 | `fetch.timeout` | `number` | `12.0` | Fetch timeout in seconds. On timeout, return the content obtained so far. |
 
@@ -66,9 +66,9 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | :--- | :--- | :--- | :--- |
 | `view.output_format` | `"markdown" \| "html"` | `"markdown"` | Main-content output format. |
 | `view.markdown_engine` | `"article" \| "full"` | `"article"` | Markdown extraction engine. article uses trafilatura for article main content; full uses markdownify for the full page. |
-| `view.render_images` | `boolean` | `false` | Whether to embed images in the result. When true, downloads images and embeds them as base64 data URIs in markdown; when false, keeps only alt text. |
 | `view.max_length` | `integer` | `8000` | Maximum result length. |
-| `view.links` | `boolean` | `true` | Whether to extract all links from the page. When true, the response includes a links field. |
+| `view.links` | `boolean` | `true` | Whether to extract all links from the page. |
+| `view.with_screenshot` | `boolean` | `false` | Whether to capture a screenshot of the page. Forces dynamic mode and captures the initial viewport as a base64-encoded PNG. |
 
 ### 4. `find` object
 
@@ -247,15 +247,6 @@ view:
   links: true
 ```
 
-Embed images in the result (as base64 data URIs):
-
-```yaml
-url: https://example.com
-operation: view
-view:
-  render_images: true
-```
-
 Output as HTML:
 
 ```yaml
@@ -369,8 +360,8 @@ Each fetch result generates a `refid`. Pass the `refid` directly as the `url` in
 - `BROWSER_LOCALE`: Browser locale. Default: empty string. Leave empty to use the system default.
 - `BROWSER_TIMEZONE_ID`: Browser timezone. Default: empty string. Leave empty to use the system default.
 - `BROWSER_COLOR_SCHEME`: Color scheme. Default: `light`.
-- `BROWSER_VIEWPORT_WIDTH`: Viewport width. Default: `1366`.
-- `BROWSER_VIEWPORT_HEIGHT`: Viewport height. Default: `768`.
+- `BROWSER_VIEWPORT_WIDTH`: Viewport width. Default: `1440`.
+- `BROWSER_VIEWPORT_HEIGHT`: Viewport height. Default: `900`.
 - `ENABLE_AUTH_STEALTH`: Whether to enable stealth in `auth` mode. Default: `true`.
 - `INTERVENTION_TIMEOUT_SECONDS`: Timeout in seconds for manual user intervention. Default: `600`.
 

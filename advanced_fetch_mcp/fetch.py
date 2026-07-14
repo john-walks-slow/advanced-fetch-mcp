@@ -41,6 +41,7 @@ class FetchResult:
     timed_out: bool = False
     timeout_stage: Optional[TimeoutStage] = None
     intervention_ended_by: Optional[str] = None
+    screenshot: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -301,6 +302,7 @@ async def dynamic_fetch(
     require_user_intervention: bool = False,
     min_stable_seconds: Optional[float] = None,
     timeout: Optional[float] = None,
+    with_screenshot: bool = False,
 ) -> FetchResult:
     total_timeout = timeout if timeout is not None else FETCH_TIMEOUT_SECONDS
     deadline = time.monotonic() + total_timeout
@@ -342,6 +344,15 @@ async def dynamic_fetch(
             if goto_completed and not require_user_intervention:
                 await _wait_for_content_stable(page, deadline, min_stable_seconds)
 
+            # Capture screenshot before page content, if requested
+            screenshot: Optional[bytes] = None
+            if with_screenshot and page and not page.is_closed():
+                try:
+                    screenshot = await page.screenshot(type="png")
+                    logger.info("[DynamicFetch] 截图完成 (%d bytes)", len(screenshot))
+                except Exception as exc:
+                    logger.warning("[DynamicFetch] 截图失败: %s", exc)
+
             if require_user_intervention:
                 html, final_url, intervention_ended_by = (
                     await wait_for_intervention_end(page)
@@ -357,6 +368,7 @@ async def dynamic_fetch(
                 timed_out=timed_out,
                 timeout_stage=timeout_stage,
                 intervention_ended_by=intervention_ended_by,
+                screenshot=screenshot,
             )
         finally:
             if page and not page.is_closed():
@@ -372,6 +384,7 @@ async def fetch_url(
     require_user_intervention: bool = False,
     min_stable_seconds: Optional[float] = None,
     timeout: Optional[float] = None,
+    with_screenshot: bool = False,
 ) -> FetchResult:
     await _wait_for_site_rate_limit(url)
     if mode == "dynamic" or require_user_intervention:
@@ -380,6 +393,7 @@ async def fetch_url(
             require_user_intervention=require_user_intervention,
             min_stable_seconds=min_stable_seconds,
             timeout=timeout,
+            with_screenshot=with_screenshot,
         )
     return static_fetch(url, timeout)
 
