@@ -47,7 +47,7 @@
 - `get_requests_proxies(url)` — 代理
 - `IGNORE_SSL_ERRORS` — SSL 证书验证
 
-> 与 `static_fetch` 保持一致，但不注入 auth cookie（对于图片 / 文件下载，auth cookie 通常不相关，且读到二进制文件后也不需要 inject cookies）。
+> 与 `static_fetch` 保持一致，包括注入 auth cookie（`_inject_auth_storage_cookies`），使工具能访问鉴权资源。
 
 ### 代码变更
 

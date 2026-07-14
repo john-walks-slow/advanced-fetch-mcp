@@ -342,7 +342,7 @@ read_image:
 | 参数 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string \| string[]` | 必填 | 图片 URL，可传单个 URL 或 URL 列表。 |
-| `timeout` | `number` | `30` | 获取图片的超时秒数。 |
+| `timeout` | `number` | `30` | 超时秒数（默认 30）。 |
 
 **输出**：返回 `ImageContent` 列表（MCP 原生图片），失败时返回 `TextContent` 说明错误原因。单 URL 失败不影响其他 URL。
 
@@ -363,7 +363,7 @@ download:
 | `url` | `string` | 必填 | 下载源 URL。 |
 | `file_path` | `string` | 必填 | 本地保存路径。自动创建父目录，自动解析为绝对路径。 |
 | `overwrite` | `boolean` | `false` | 若为 `false` 且文件已存在则报错；设为 `true` 覆盖已有文件。 |
-| `timeout` | `number` | `120` | 下载超时秒数。 |
+| `timeout` | `number` | `120` | 超时秒数（默认 120）。 |
 
 **输出**：成功时返回包含 `file_path`、`size`、`content_type` 的 JSON；失败时返回 `{success: false, error: ...}`。下载中断会自动清理残留文件。
 

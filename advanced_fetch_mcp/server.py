@@ -192,7 +192,6 @@ def _infer_image_format(content_type: str) -> str:
 ReadImageTimeoutParam = Annotated[
     float,
     Field(
-        default=30.0,
         ge=1.0,
         description=schema_text(
             "获取图片的超时秒数。",
@@ -326,6 +325,7 @@ async def download(
             resp.raise_for_status()
 
             file_size = 0
+            content_type = resp.headers.get("content-type", "")
             with open(abs_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=8192):
                     if chunk:
@@ -339,7 +339,7 @@ async def download(
                     "success": True,
                     "file_path": abs_path,
                     "size": file_size,
-                    "content_type": resp.headers.get("content-type", ""),
+                    "content_type": content_type,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -350,7 +350,7 @@ async def download(
         if os.path.exists(abs_path):
             try:
                 os.remove(abs_path)
-            except Exception:
+            except OSError:
                 pass
         return TextContent(
             type="text",

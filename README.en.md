@@ -319,6 +319,52 @@ fetch:
   mode: dynamic
 ```
 
+## `read_image` — Fetch Images
+
+Standalone tool, independent of `advanced_fetch`.
+
+```yaml
+# Single image
+read_image:
+  url: https://example.com/photo.png
+
+# Multiple images
+read_image:
+  url:
+    - https://example.com/photo1.png
+    - https://example.com/photo2.jpg
+```
+
+**Parameters**:
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `url` | `string \| string[]` | Required | Image URL, or a list of image URLs. |
+| `timeout` | `number` | `30` | Timeout in seconds (default 30). |
+
+**Output**: Returns a list of `ImageContent` (native MCP images). On failure, returns `TextContent` with an error message. A failure for one URL does not affect others.
+
+## `download` — Download Files
+
+Standalone tool, independent of `advanced_fetch`.
+
+```yaml
+download:
+  url: https://example.com/document.pdf
+  file_path: /path/to/save/document.pdf
+```
+
+**Parameters**:
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `url` | `string` | Required | Source URL to download from. |
+| `file_path` | `string` | Required | Local file path to save to. Creates parent directories automatically. Resolved to an absolute path. |
+| `overwrite` | `boolean` | `false` | If `false` and the file exists, returns an error. Set to `true` to overwrite. |
+| `timeout` | `number` | `120` | Timeout in seconds (default 120). |
+
+**Output**: On success, returns JSON with `file_path`, `size`, and `content_type`. On failure, returns `{success: false, error: ...}`. Partial files are cleaned up on failure.
+
 ## Session Modes
 
 To fetch intranet pages, use `operation="elicit"` to open a visible browser window. After you log in once, cookies are automatically saved via `storage_state.json`, and subsequent silent requests (without `operation="elicit"`) will carry the login state automatically.
