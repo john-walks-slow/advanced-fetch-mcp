@@ -41,7 +41,7 @@ class FetchResult:
     timed_out: bool = False
     timeout_stage: Optional[TimeoutStage] = None
     elicit_ended_by: Optional[str] = None
-    screenshot: Optional[str] = None
+    screenshot: Optional[bytes] = None
 
 
 @dataclass(slots=True)
@@ -312,14 +312,16 @@ async def dynamic_fetch(
     timeout_stage: Optional[TimeoutStage] = None
     elicit_ended_by: Optional[str] = None
 
-    headless = not require_elicit
+    if require_elicit:
+        session = browser_manager.open_elicit_session()
+        need_elicit_script = True
+    else:
+        session = browser_manager.open_session(apply_stealth=True)
+        need_elicit_script = False
 
-    async with browser_manager.open_session(
-        headless=headless,
-        apply_stealth=not require_elicit,
-    ) as context:
+    async with session as context:
         try:
-            if require_elicit:
+            if need_elicit_script:
                 await context.add_init_script(build_elicit_script())
 
             page = await context.new_page()
@@ -410,19 +412,22 @@ async def evaluate_script_on_page(
     deadline = time.monotonic() + total_timeout
 
     page: Optional[Page] = None
-    headless = not require_elicit
     timed_out = False
     timeout_stage: Optional[TimeoutStage] = None
     elicit_ended_by: Optional[str] = None
 
     await _wait_for_site_rate_limit(url)
 
-    async with browser_manager.open_session(
-        headless=headless,
-        apply_stealth=not require_elicit,
-    ) as context:
+    if require_elicit:
+        session = browser_manager.open_elicit_session()
+        need_elicit_script = True
+    else:
+        session = browser_manager.open_session(apply_stealth=True)
+        need_elicit_script = False
+
+    async with session as context:
         try:
-            if require_elicit:
+            if need_elicit_script:
                 await context.add_init_script(build_elicit_script())
 
             page = await context.new_page()

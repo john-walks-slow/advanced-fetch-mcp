@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import sys
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
@@ -203,55 +204,143 @@ async def _launch_browser_with_fallback(pw: Playwright, *, headless: bool) -> Br
 
 @dataclass(slots=True)
 class BrowserManager:
-    async def _launch_browser(self, *, headless: bool) -> tuple[Playwright, Browser]:
-        pw = await async_playwright().start()
-        browser = await _launch_browser_with_fallback(pw, headless=headless)
-        return pw, browser
+    """管理 Playwright 浏览器实例的生命周期。
+
+    核心策略：
+    - Playwright 实例 + 一个 headless 浏览器在进程内长期复用（lazy init）
+    - 每次请求创建一个独立的 BrowserContext（加载 storage_state 实现鉴权继承）
+    - 请求结束后 Context 关闭，浏览器保持存活
+    - Elicit 场景创建临时 headful 浏览器，操作完成后销毁
+    """
+    _pw: Optional[Playwright] = None
+    _browser: Optional[Browser] = None
+    _pw_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _browser_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _store_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def _ensure_playwright(self) -> Playwright:
+        if self._pw is not None:
+            return self._pw
+        async with self._pw_lock:
+            if self._pw is not None:
+                return self._pw
+            self._pw = await async_playwright().start()
+            logger.info("[Browser] Playwright 已启动")
+        return self._pw
+
+    async def _ensure_browser_headless(self) -> Browser:
+        """获取或创建长期复用的 headless 浏览器，带崩溃自动恢复。"""
+        if self._browser is not None:
+            try:
+                if self._browser.is_connected():
+                    return self._browser
+                logger.warning("[Browser] 浏览器连接已断开，准备重建")
+            except Exception:
+                logger.warning("[Browser] 检测到浏览器不可用，准备重建")
+            self._browser = None
+
+        async with self._browser_lock:
+            if self._browser is not None:
+                return self._browser
+            pw = await self._ensure_playwright()
+            self._browser = await _launch_browser_with_fallback(pw, headless=True)
+            logger.info("[Browser] 无头浏览器已就绪")
+        return self._browser
+
+    def _make_context_kwargs(self) -> dict:
+        kwargs = _base_context_kwargs()
+        if AUTH_STORAGE_STATE_PATH.exists():
+            kwargs["storage_state"] = str(AUTH_STORAGE_STATE_PATH)
+        return kwargs
+
+    async def _save_storage_state_atomic(self, context: Optional[BrowserContext]) -> None:
+        """原子写入 storage_state，避免并发写竞争。"""
+        if context is None:
+            return
+        try:
+            if context.is_closed():
+                return
+        except Exception:
+            return
+        async with self._store_lock:
+            tmp = AUTH_STORAGE_STATE_PATH.with_suffix(".tmp")
+            try:
+                AUTH_STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+                await context.storage_state(path=str(tmp))
+                os.replace(str(tmp), str(AUTH_STORAGE_STATE_PATH))
+            except Exception as exc:
+                logger.warning("[Browser] 持久化 storage_state 出错: %s", exc)
+                try:
+                    os.remove(str(tmp))
+                except FileNotFoundError:
+                    pass
 
     @asynccontextmanager
-    async def _auth_session(self, *, headless: bool, apply_stealth: bool = True) -> AsyncIterator[BrowserContext]:
-        pw, browser = await self._launch_browser(headless=headless)
+    async def open_session(self, *, apply_stealth: bool = True) -> AsyncIterator[BrowserContext]:
+        """普通请求：从长期复用的 headless 浏览器创建上下文。
+
+        请求结束后自动保存 storage_state 并关闭上下文。
+        """
+        browser = await self._ensure_browser_headless()
         context: Optional[BrowserContext] = None
         try:
-            context_kwargs = _base_context_kwargs()
-            if AUTH_STORAGE_STATE_PATH.exists():
-                context_kwargs["storage_state"] = str(AUTH_STORAGE_STATE_PATH)
-
-            context = await browser.new_context(**context_kwargs)
+            kwargs = self._make_context_kwargs()
+            context = await browser.new_context(**kwargs)
             if apply_stealth:
                 await apply_auth_stealth(context)
             yield context
         finally:
             if context is not None:
-                try:
-                    AUTH_STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-                    await context.storage_state(path=str(AUTH_STORAGE_STATE_PATH))
-                    logger.info("[Browser] 已保存 auth storage_state: %s", AUTH_STORAGE_STATE_PATH)
-                except Exception as exc:
-                    logger.warning("[Browser] 持久化 auth storage_state 出错: %s", exc)
-
+                await self._save_storage_state_atomic(context)
                 try:
                     await context.close()
                 except Exception as exc:
                     logger.warning("[Browser] 关闭 context 出错: %s", exc)
 
-            try:
-                await browser.close()
-            except Exception as exc:
-                logger.warning("[Browser] 关闭 browser 出错: %s", exc)
-
-            try:
-                await pw.stop()
-            except Exception as exc:
-                logger.warning("[Browser] 停止 Playwright 出错: %s", exc)
-
     @asynccontextmanager
-    async def open_session(self, *, headless: bool, apply_stealth: bool = True) -> AsyncIterator[BrowserContext]:
-        async with self._auth_session(headless=headless, apply_stealth=apply_stealth) as ctx:
-            yield ctx
+    async def open_elicit_session(self) -> AsyncIterator[BrowserContext]:
+        """Elicit 请求：创建临时 headful 浏览器+上下文。
+
+        用户完成人机验证或登录后自动保存 storage_state，
+        然后关闭上下文和浏览器（Playwright 实例保持存活）。
+        """
+        pw = await self._ensure_playwright()
+        elicit_browser: Optional[Browser] = None
+        context: Optional[BrowserContext] = None
+        try:
+            elicit_browser = await _launch_browser_with_fallback(pw, headless=False)
+            kwargs = self._make_context_kwargs()
+            context = await elicit_browser.new_context(**kwargs)
+            yield context
+        finally:
+            if context is not None:
+                await self._save_storage_state_atomic(context)
+                try:
+                    await context.close()
+                except Exception as exc:
+                    logger.warning("[Browser] 关闭 elicit context 出错: %s", exc)
+            if elicit_browser is not None:
+                try:
+                    await elicit_browser.close()
+                except Exception as exc:
+                    logger.warning("[Browser] 关闭 elicit browser 出错: %s", exc)
 
     async def close(self):
-        pass
+        """关闭主浏览器并停止 Playwright。"""
+        if self._browser is not None:
+            try:
+                await self._browser.close()
+                logger.info("[Browser] 主浏览器已关闭")
+            except Exception as exc:
+                logger.warning("[Browser] 关闭主浏览器出错: %s", exc)
+            self._browser = None
+        if self._pw is not None:
+            try:
+                await self._pw.stop()
+                logger.info("[Browser] Playwright 已停止")
+            except Exception as exc:
+                logger.warning("[Browser] 停止 Playwright 出错: %s", exc)
+            self._pw = None
 
 
 browser_manager = BrowserManager()

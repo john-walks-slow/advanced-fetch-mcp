@@ -502,20 +502,16 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
         mock_session_cm.__aexit__.return_value = None
 
         mock_manager = MagicMock()
-        mock_manager.open_session = MagicMock(return_value=mock_session_cm)
+        mock_manager.open_elicit_session = MagicMock(return_value=mock_session_cm)
 
         with patch("advanced_fetch_mcp.fetch.browser_manager", mock_manager):
-            with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
-                with patch(
-                    "advanced_fetch_mcp.fetch.wait_for_elicit_end",
-                    new=AsyncMock(return_value=("", "", "page_closed")),
-                ):
-                    with self.assertRaises(EvalElicitClosedError):
-                        await evaluate_script_on_page(
-                            url="https://example.com",
-                            require_elicit=True,
-                            script="document.title",
-                            timeout=1.0,
-                        )
+            with patch("advanced_fetch_mcp.fetch.wait_for_elicit_end", new=AsyncMock(return_value=("", "", "page_closed"))):
+                with self.assertRaises(EvalElicitClosedError):
+                    await evaluate_script_on_page(
+                        url="https://example.com",
+                        require_elicit=True,
+                        script="document.title",
+                        timeout=1.0,
+                    )
 
         mock_page.evaluate.assert_not_awaited()
