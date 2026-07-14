@@ -75,8 +75,8 @@ async def advanced_fetch(
 
 
 advanced_fetch.__doc__ = schema_text(
-    "快速、强大、节省 Token 的网页抓取工具。",
-    "Fast, powerful, token-efficient web fetching tool.",
+    "读取网页内容。支持需要鉴权的网站和动态网站。",
+    "Read web page content. Supports authenticated sites and dynamic websites.",
 )
 
 
