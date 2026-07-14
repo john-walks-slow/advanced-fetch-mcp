@@ -43,7 +43,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `url` | `string` | Required | Full URL of the target webpage, or a refid to reuse a previous fetch result. |
+| `url` | `string \| Array<string>` | Required | Full URL of the target webpage, a refid to reuse a previous fetch result, or a list of URLs. When a list is given, multiple pages are fetched in parallel and results are returned as an array. |
 | `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "elicit"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or elicit (request manual user action, use only when blocked by captcha/login wall). |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `view` | `object` | See below | View operation configuration. |

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -27,11 +27,11 @@ def schema_error(zh: str, en: str) -> str:
 
 
 UrlParam = Annotated[
-    str,
+    Union[str, List[str]],
     Field(
         description=schema_text(
-            "目标网页的完整 URL 或之前结果的引用 ID（复用抓取结果）。",
-            "Full URL of the target webpage, or a refid to reuse a previous fetch result.",
+            "目标网页的完整 URL、之前结果的引用 ID（复用抓取结果），或 URL 列表。传入列表时同时批量处理多个页面，返回 results 数组。",
+            "Full URL of the target webpage, a refid to reuse a previous fetch result, or a list of URLs. When a list is given, multiple pages are fetched in parallel and results are returned as an array.",
         )
     ),
 ]
@@ -382,6 +382,29 @@ class AdvancedFetchParams(BaseModel):
                     schema_error(
                         "operation=eval 时，fetch.mode 必须为 dynamic。",
                         "When operation=eval, fetch.mode must be dynamic.",
+                    )
+                )
+
+        if isinstance(self.url, list):
+            if not self.url:
+                raise ValueError(
+                    schema_error(
+                        "URL 列表不能为空。",
+                        "URL list must not be empty.",
+                    )
+                )
+            if self.operation == "elicit":
+                raise ValueError(
+                    schema_error(
+                        "elicit 操作不支持多个 URL。",
+                        "elicit does not support multiple URLs.",
+                    )
+                )
+            if self.cursor is not None:
+                raise ValueError(
+                    schema_error(
+                        "cursor 不支持多个 URL。",
+                        "cursor is not supported with multiple URLs.",
                     )
                 )
 

@@ -1,3 +1,6 @@
+import json
+import os
+import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -615,3 +618,181 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
             result, _ = await execute_advanced_fetch(ctx=object(), request=request)
         self.assertEqual(result["links"], [])
         self.assertEqual(result["links_total"], 0)
+
+    # ── Multi-URL ──────────────────────────────────────────
+
+    def test_multi_url_empty_list_raises_error(self):
+        with self.assertRaises(ValueError):
+            AdvancedFetchParams(url=[])
+
+    def test_multi_url_with_elicit_raises_error(self):
+        with self.assertRaises(ValueError):
+            AdvancedFetchParams(
+                url=["https://a.com", "https://b.com"],
+                operation="elicit",
+                fetch={"mode": "dynamic"},
+            )
+
+    def test_multi_url_with_cursor_raises_error(self):
+        with self.assertRaises(ValueError):
+            AdvancedFetchParams(
+                url=["https://a.com", "https://b.com"],
+                cursor=5,
+            )
+
+    async def test_multi_url_parallel_success(self):
+        from advanced_fetch_mcp.server import _execute_multi_url
+
+        request = AdvancedFetchParams(
+            url=["https://page1.com", "https://page2.com"],
+            max_length=9999,
+        )
+        mock_results = [
+            ({"success": True, "final_url": "https://page1.com", "result": "Page1 content"}, None),
+            ({"success": True, "final_url": "https://page2.com", "result": "Page2 content"}, None),
+        ]
+
+        with (
+            patch(
+                "advanced_fetch_mcp.server.execute_advanced_fetch",
+                new=AsyncMock(side_effect=mock_results),
+            ),
+        ):
+            blocks = await _execute_multi_url(ctx=object(), request=request)
+
+        self.assertEqual(len(blocks), 1)  # no screenshots → 1 Text block
+        payload = json.loads(blocks[0].text)
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["results_total"], 2)
+        self.assertEqual(payload["results_succeeded"], 2)
+        self.assertEqual(payload["results_failed"], 0)
+        self.assertEqual(payload["results"][0]["result"], "Page1 content")
+        self.assertEqual(payload["results"][1]["result"], "Page2 content")
+        self.assertEqual(payload["results"][0]["url"], "https://page1.com")
+        self.assertEqual(payload["results"][1]["url"], "https://page2.com")
+
+    async def test_multi_url_partial_failure(self):
+        from advanced_fetch_mcp.server import _execute_multi_url
+
+        request = AdvancedFetchParams(
+            url=["https://good.com", "https://bad.com"],
+            max_length=9999,
+        )
+        mock_results = [
+            ({"success": True, "final_url": "https://good.com", "result": "OK"}, None),
+            Exception("Connection refused"),
+        ]
+
+        with (
+            patch(
+                "advanced_fetch_mcp.server.execute_advanced_fetch",
+                new=AsyncMock(side_effect=mock_results),
+            ),
+        ):
+            blocks = await _execute_multi_url(ctx=object(), request=request)
+
+        payload = json.loads(blocks[0].text)
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["results_total"], 2)
+        self.assertEqual(payload["results_succeeded"], 1)
+        self.assertEqual(payload["results_failed"], 1)
+        self.assertTrue(payload["results"][0]["success"])
+        self.assertFalse(payload["results"][1]["success"])
+
+    async def test_multi_url_with_screenshots(self):
+        from advanced_fetch_mcp.server import _execute_multi_url
+
+        request = AdvancedFetchParams(
+            url=["https://page1.com", "https://page2.com"],
+            view={"with_screenshot": True},
+            max_length=9999,
+        )
+        fake_png = b"fake_png_data_12345"
+        mock_results = [
+            (
+                {"success": True, "final_url": "https://page1.com", "result": "A"},
+                fake_png,
+            ),
+            (
+                {"success": True, "final_url": "https://page2.com", "result": "B"},
+                None,
+            ),
+        ]
+
+        with (
+            patch(
+                "advanced_fetch_mcp.server.execute_advanced_fetch",
+                new=AsyncMock(side_effect=mock_results),
+            ),
+        ):
+            blocks = await _execute_multi_url(ctx=object(), request=request)
+
+        # 1 TextContent + 1 Image (only page1 has screenshot)
+        self.assertEqual(len(blocks), 2)
+        payload = json.loads(blocks[0].text)
+        self.assertEqual(payload["results_succeeded"], 2)
+        # screenshot popped from result dict
+        self.assertNotIn("screenshot", payload["results"][0])
+        self.assertNotIn("screenshot", payload["results"][1])
+        # Image block contains the fake PNG
+        self.assertEqual(blocks[1].data, fake_png)
+
+    async def test_single_url_workflow_unchanged(self):
+        """Verify that a single string URL still produces the same workflow result shape."""
+        request = AdvancedFetchParams(url="https://example.com")
+        with (
+            patch(
+                "advanced_fetch_mcp.workflow.fetch_url",
+                new=AsyncMock(
+                    return_value=FetchResult(
+                        html="<main>Hello</main>", final_url="https://example.com/final"
+                    )
+                ),
+            ),
+            patch("advanced_fetch_mcp.workflow.render_view", return_value="Hello"),
+            patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
+        ):
+            result, _ = await execute_advanced_fetch(ctx=object(), request=request)
+        self.assertIn("Hello", result["result"])
+        self.assertNotIn("results", result)  # not a multi-URL result
+        self.assertIn("refid", result)
+
+    async def test_multi_url_output_to_file(self):
+        import tempfile
+
+        from advanced_fetch_mcp.server import _execute_multi_url
+
+        request = AdvancedFetchParams(
+            url=["https://page1.com", "https://page2.com"],
+            output_to_file="/tmp/non_existent_dir/test_output.json",
+            max_length=9999,
+        )
+        mock_results = [
+            ({"success": True, "final_url": "https://page1.com", "result": "Page1"}, None),
+            ({"success": True, "final_url": "https://page2.com", "result": "Page2"}, None),
+        ]
+
+        with (
+            patch(
+                "advanced_fetch_mcp.server.execute_advanced_fetch",
+                new=AsyncMock(side_effect=mock_results),
+            ),
+        ):
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+                tmp_path = tmp.name
+
+            try:
+                request.output_to_file = tmp_path
+                blocks = await _execute_multi_url(ctx=object(), request=request)
+                payload = json.loads(blocks[0].text)
+                # Response is simplified for output_to_file
+                self.assertTrue(payload["success"])
+                self.assertEqual(payload["output_to_file"], tmp_path)
+                # Verify file was written with full results
+                with open(tmp_path, "r") as f:
+                    written = json.load(f)
+                self.assertIn("results", written)
+                self.assertEqual(len(written["results"]), 2)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)

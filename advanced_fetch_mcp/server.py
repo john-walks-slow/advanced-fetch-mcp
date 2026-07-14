@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
-from typing import Annotated, List, Union
+import time
+from typing import Annotated, Dict, List, Union
 
 import requests
 from fastmcp import Context, FastMCP
@@ -24,11 +26,96 @@ from .params import (
     ViewParam,
     schema_text,
 )
-from .settings import IGNORE_SSL_ERRORS, USER_AGENT, get_requests_proxies
+from .settings import IGNORE_SSL_ERRORS, USER_AGENT, get_requests_proxies, logger
 from .workflow import execute_advanced_fetch
 
 
 mcp = FastMCP("AdvancedFetchMCP")
+
+
+async def _execute_multi_url(
+    ctx: Context,
+    request: AdvancedFetchParams,
+) -> List[Union[TextContent, ImageContent]]:
+    """Fetch multiple URLs in parallel and aggregate results."""
+    urls: List[str] = request.url  # type: ignore[assignment]
+    _t0 = time.monotonic()
+
+    async def _run_single(single_url: str) -> Dict:
+        single_request = request.model_copy(
+            update={"url": single_url, "output_to_file": None}
+        )
+        try:
+            result_dict, screenshot_bytes = await execute_advanced_fetch(
+                ctx=ctx, request=single_request
+            )
+            if screenshot_bytes:
+                result_dict["screenshot"] = base64.b64encode(screenshot_bytes).decode(
+                    "utf-8"
+                )
+            result_dict["url"] = single_url
+            return result_dict
+        except Exception as exc:
+            logger.warning("[MultiURL] URL %s 失败: %s", single_url, exc)
+            return {
+                "success": False,
+                "url": single_url,
+                "error": str(exc),
+            }
+
+    raw_results = await asyncio.gather(
+        *[_run_single(u) for u in urls], return_exceptions=True
+    )
+
+    results: List[Dict] = []
+    for idx, item in enumerate(raw_results):
+        if isinstance(item, BaseException):
+            results.append({"success": False, "url": urls[idx], "error": str(item)})
+        else:
+            results.append(item)
+
+    succeeded = sum(1 for r in results if r.get("success"))
+    failed = len(results) - succeeded
+
+    result_dict: Dict = {
+        "success": True,
+        "results": results,
+        "results_total": len(results),
+        "results_succeeded": succeeded,
+        "results_failed": failed,
+        "duration_seconds": time.monotonic() - _t0,
+    }
+
+    # output_to_file at aggregate level
+    if request.output_to_file:
+        output_path = request.output_to_file
+        dir_path = os.path.dirname(output_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(result_dict, f, ensure_ascii=False, indent=2)
+        result_dict = {
+            "success": True,
+            "output_to_file": output_path,
+            "duration_seconds": result_dict["duration_seconds"],
+        }
+
+    # Collect screenshots as Image blocks
+    screenshots_b64: List[str] = []
+    for r in results:
+        ss = r.pop("screenshot", None)
+        if ss:
+            screenshots_b64.append(ss)
+
+    blocks: List[Union[TextContent, ImageContent]] = [
+        TextContent(
+            type="text", text=json.dumps(result_dict, ensure_ascii=False, indent=2)
+        )
+    ]
+    for ss_b64 in screenshots_b64:
+        blocks.append(Image(data=base64.b64decode(ss_b64), format="png"))
+
+    return blocks
 
 
 @mcp.tool()
@@ -48,6 +135,11 @@ async def advanced_fetch(
     }
     request = AdvancedFetchParams.model_validate(params_dict)
 
+    # Multi-URL: parallel batch processing
+    if isinstance(request.url, list):
+        return await _execute_multi_url(ctx=ctx, request=request)
+
+    # Single URL path (unchanged)
     if request.output_to_file:
         request.view.max_length = 10**9
 

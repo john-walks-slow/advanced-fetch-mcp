@@ -42,7 +42,7 @@
 
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `url` | `string` | 必填 | 目标网页的完整 URL 或之前结果的引用 ID（复用抓取结果）。 |
+| `url` | `string \| Array<string>` | 必填 | 目标网页的完整 URL、之前结果的引用 ID（复用抓取结果），或 URL 列表。传入列表时同时批量处理多个页面，返回 results 数组。 |
 | `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "elicit"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作（当且仅当被 captcha / 登录墙阻拦时使用）。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `view` | `object` | 见下表 | View 操作配置 |

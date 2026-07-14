@@ -16,10 +16,6 @@ class ReadImageTests(unittest.IsolatedAsyncioTestCase):
         import importlib, sys
 
         sys.modules.pop("advanced_fetch_mcp.server", None)
-        # Force fresh import to ensure module-level code runs
-        for mod in list(sys.modules.keys()):
-            if mod.startswith("advanced_fetch_mcp"):
-                sys.modules.pop(mod, None)
         return importlib.import_module("advanced_fetch_mcp.server")
 
     async def asyncSetUp(self):
@@ -209,9 +205,6 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
         import importlib, sys
 
         sys.modules.pop("advanced_fetch_mcp.server", None)
-        for mod in list(sys.modules.keys()):
-            if mod.startswith("advanced_fetch_mcp"):
-                sys.modules.pop(mod, None)
         return importlib.import_module("advanced_fetch_mcp.server")
 
     async def asyncSetUp(self):
@@ -393,9 +386,6 @@ class InferImageFormatTests(unittest.TestCase):
         import importlib, sys
 
         sys.modules.pop("advanced_fetch_mcp.server", None)
-        for mod in list(sys.modules.keys()):
-            if mod.startswith("advanced_fetch_mcp"):
-                sys.modules.pop(mod, None)
         return importlib.import_module("advanced_fetch_mcp.server")
 
     def setUp(self):
@@ -434,9 +424,6 @@ class ToolRegistrationTests(unittest.IsolatedAsyncioTestCase):
         import importlib, sys
 
         sys.modules.pop("advanced_fetch_mcp.server", None)
-        for mod in list(sys.modules.keys()):
-            if mod.startswith("advanced_fetch_mcp"):
-                sys.modules.pop(mod, None)
         server = importlib.import_module("advanced_fetch_mcp.server")
 
         tools = await server.mcp.list_tools()
@@ -450,9 +437,6 @@ class ToolRegistrationTests(unittest.IsolatedAsyncioTestCase):
         import importlib, sys
 
         sys.modules.pop("advanced_fetch_mcp.server", None)
-        for mod in list(sys.modules.keys()):
-            if mod.startswith("advanced_fetch_mcp"):
-                sys.modules.pop(mod, None)
         server = importlib.import_module("advanced_fetch_mcp.server")
 
         tools = await server.mcp.list_tools()
