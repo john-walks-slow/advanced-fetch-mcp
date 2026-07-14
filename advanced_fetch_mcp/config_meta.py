@@ -138,8 +138,8 @@ ENV_VAR_SPECS: tuple[EnvVarSpec, ...] = (
         "INTERVENTION_TIMEOUT_SECONDS",
         "600",
         "browser",
-        "用户人工介入等待超时秒数。",
-        "Timeout in seconds for manual user intervention.",
+        "用户人工操作等待超时秒数。",
+        "Timeout in seconds for manual user action.",
     ),
     EnvVarSpec(
         "ENABLE_STATIC_PROXY",

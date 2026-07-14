@@ -18,7 +18,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         _REFID_CACHE.clear()
         _SITE_RATE_LIMIT_NEXT_ALLOWED_AT.clear()
 
-    async def test_fetch_url_forces_dynamic_when_intervention_requested(self):
+    async def test_fetch_url_forces_dynamic_when_elicit_requested(self):
         with patch(
             "advanced_fetch_mcp.fetch.dynamic_fetch",
             new=AsyncMock(return_value=FetchResult(html="x", final_url="u")),
@@ -27,7 +27,7 @@ class FetchAndBrowserTests(unittest.IsolatedAsyncioTestCase):
         mock_dynamic.assert_awaited_once()
         self.assertEqual(result.final_url, "u")
 
-    async def test_require_user_intervention_uses_dynamic_flow(self):
+    async def test_require_elicit_uses_dynamic_flow(self):
         with patch(
             "advanced_fetch_mcp.fetch.dynamic_fetch",
             new=AsyncMock(return_value=FetchResult(html="x", final_url="u")),
@@ -431,7 +431,7 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
             with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
                 result = await evaluate_script_on_page(
                     url="https://example.com",
-                    require_user_intervention=False,
+                    require_elicit=False,
                     script="document.title",
                     timeout=1.0,
                 )
@@ -472,7 +472,7 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
                 with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
                     result = await evaluate_script_on_page(
                         url="https://example.com",
-                        require_user_intervention=False,
+                        require_elicit=False,
                         script="document.title",
                         timeout=1.0,
                     )
@@ -480,9 +480,9 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
         mock_wait.assert_awaited_once_with("https://example.com")
         self.assertEqual(result.value, "result")
 
-    async def test_eval_intervention_page_closed_raises_clear_error(self):
+    async def test_eval_elicit_page_closed_raises_clear_error(self):
         from advanced_fetch_mcp.fetch import (
-            EvalInterventionClosedError,
+            EvalElicitClosedError,
             evaluate_script_on_page,
         )
 
@@ -507,13 +507,13 @@ class EvaluateScriptOnPageTests(unittest.IsolatedAsyncioTestCase):
         with patch("advanced_fetch_mcp.fetch.browser_manager", mock_manager):
             with patch("advanced_fetch_mcp.fetch._wait_for_content_stable", AsyncMock()):
                 with patch(
-                    "advanced_fetch_mcp.fetch.wait_for_intervention_end",
+                    "advanced_fetch_mcp.fetch.wait_for_elicit_end",
                     new=AsyncMock(return_value=("", "", "page_closed")),
                 ):
-                    with self.assertRaises(EvalInterventionClosedError):
+                    with self.assertRaises(EvalElicitClosedError):
                         await evaluate_script_on_page(
                             url="https://example.com",
-                            require_user_intervention=True,
+                            require_elicit=True,
                             script="document.title",
                             timeout=1.0,
                         )

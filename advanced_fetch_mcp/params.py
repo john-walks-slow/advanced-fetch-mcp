@@ -15,7 +15,7 @@ from .settings import (
 FetchMode = Literal["dynamic", "static"]
 MarkdownEngine = Literal["article", "full"]
 OutputFormat = Literal["markdown", "html"]
-Operation = Literal["view", "find", "sampling", "eval", "request_human_action"]
+Operation = Literal["view", "find", "sampling", "eval", "elicit"]
 
 
 def schema_text(zh: str, en: str) -> str:
@@ -40,8 +40,8 @@ OperationParam = Annotated[
     Field(
         default="view",
         description=schema_text(
-            "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作网站（当且仅当被 captcha / 登录墙阻拦时使用。鉴权信息会保存下来。）。",
-            "Operation: view, in-page search, LLM extraction, JS execution, or request manual intervention (use only when blocked by captcha/login wall; auth info is saved).",
+            "操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作（当且仅当被 captcha / 登录墙阻拦时使用）。",
+            "Operation: view, in-page search, LLM extraction, JS execution, or elicit (request manual user action, use only when blocked by captcha/login wall).",
         ),
     ),
 ]
@@ -166,16 +166,6 @@ EvalScriptParam = Annotated[
         )
     ),
 ]
-InterventionMessageParam = Annotated[
-    Optional[str],
-    Field(
-        default=None,
-        description=schema_text(
-            "request_human_action 时，向用户展示的说明文字，解释需要用户做什么。",
-            "When operation=request_human_action, a message shown to the user explaining what action is needed.",
-        ),
-    ),
-]
 
 
 class FetchParams(BaseModel):
@@ -228,6 +218,18 @@ class EvalParams(BaseModel):
     script: EvalScriptParam
 
 
+class ElicitParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    message: str | None = Field(
+        default=None,
+        description=schema_text(
+            "向用户展示的说明文字，解释需要用户做什么。",
+            "A message shown to the user explaining what action is needed.",
+        ),
+    )
+
+
 FetchParam = Annotated[
     FetchParams,
     Field(
@@ -278,6 +280,16 @@ EvalParam = Annotated[
         ),
     ),
 ]
+ElicitParam = Annotated[
+    Optional[ElicitParams],
+    Field(
+        default=None,
+        description=schema_text(
+            "Elicit 操作配置",
+            "Elicit operation configuration.",
+        ),
+    ),
+]
 
 
 class AdvancedFetchParams(BaseModel):
@@ -290,9 +302,9 @@ class AdvancedFetchParams(BaseModel):
     find: FindParam
     sampling: SamplingParam
     eval: EvalParam
+    elicit: ElicitParam
     cursor: CursorParam
     max_length: MaxLengthParam
-    intervention_message: InterventionMessageParam
 
     def to_view_config(self) -> "ViewConfig":
         return ViewConfig(
@@ -314,12 +326,12 @@ class AdvancedFetchParams(BaseModel):
                         "When operation=view, find, sampling, and eval objects must not be provided.",
                     )
                 )
-        elif self.operation == "request_human_action":
+        elif self.operation == "elicit":
             if has_find or has_sampling or has_eval:
                 raise ValueError(
                     schema_error(
-                        "operation=request_human_action 时，不能提供 find、sampling 或 eval 对象。",
-                        "When operation=request_human_action, find, sampling, and eval objects must not be provided.",
+                        "operation=elicit 时，不能提供 find、sampling 或 eval 对象。",
+                        "When operation=elicit, find, sampling, and eval objects must not be provided.",
                     )
                 )
             self.fetch.mode = "dynamic"

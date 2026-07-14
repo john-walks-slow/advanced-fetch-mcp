@@ -1,3 +1,16 @@
+## 模块地图
+
+- `params.py` — 参数模型定义：`AdvancedFetchParams`、各 operation 参数（`FindParams`、`SamplingParams`、`EvalParams`、`ElicitParams`）、`FetchConfig`、`ViewConfig` 等
+- `server.py` — FastMCP 服务入口，参数校验与路由
+- `workflow.py` — 核心编排：fetch → render → cache → return；含 elicit 四层降级逻辑
+- `fetch.py` — 页面获取：静态 HTTP 与 Playwright 动态；elicit 时强制 dynamic
+- `detection.py` — 页面检测（CAPTCHA/登录墙）+ 浏览器内 JS 轮询辅助（`wait_for_elicit_end` / `build_elicit_script`）
+- `render.py` / `render/` — HTML→Markdown 渲染引擎
+- `url_utils.py` — URL 相对化、同源判断
+- `sampling.py` — LLM 采样提取逻辑
+- `config_meta.py` — 环境变量选项定义（单一来源）
+- `docs_sync.py` — 自动同步 `.env.example` 与 README 中的 schema/环境变量段落
+
 # Project Agents
 
 ## Docs Sync

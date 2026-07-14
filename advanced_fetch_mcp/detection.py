@@ -6,11 +6,11 @@ from typing import Tuple
 
 from playwright.async_api import Page
 
-from .settings import INTERVENTION_BUTTON_ID, INTERVENTION_TIMEOUT_SECONDS, logger
+from .settings import ELICIT_BUTTON_ID, ELICIT_TIMEOUT_SECONDS, logger
 
 
-def build_intervention_script() -> str:
-    payload = json.dumps({"button_id": INTERVENTION_BUTTON_ID}, ensure_ascii=False)
+def build_elicit_script() -> str:
+    payload = json.dumps({"button_id": ELICIT_BUTTON_ID}, ensure_ascii=False)
     return f"""
 (() => {{
   const cfg = {payload};
@@ -19,7 +19,7 @@ def build_intervention_script() -> str:
     const btn = document.createElement('button');
     btn.id = cfg.button_id;
     btn.textContent = '我已完成页面操作';
-    btn.title = '当你确认登录、验证或手动操作已经完成后，点击这里继续抓取';
+    btn.title = '当你确认登录、验证或手动操作已经完成后，点击这里继续';
     btn.style.position = 'fixed';
     btn.style.right = '12px';
     btn.style.bottom = '12px';
@@ -32,7 +32,7 @@ def build_intervention_script() -> str:
     btn.style.fontSize = '13px';
     btn.style.cursor = 'pointer';
     btn.addEventListener('click', () => {{
-      window.__ADVANCED_FETCH_INTERVENTION_DONE__ = true;
+      window.__ADVANCED_FETCH_ELICIT_DONE__ = true;
     }});
     document.documentElement.appendChild(btn);
   }};
@@ -45,7 +45,7 @@ def build_intervention_script() -> str:
 """
 
 
-async def wait_for_intervention_end(page: Page) -> Tuple[str, str, str]:
+async def wait_for_elicit_end(page: Page) -> Tuple[str, str, str]:
     page_closed = asyncio.Event()
 
     def _on_close():
@@ -56,8 +56,8 @@ async def wait_for_intervention_end(page: Page) -> Tuple[str, str, str]:
     reason = "timeout"
     button_task = asyncio.create_task(
         page.wait_for_function(
-            "() => window.__ADVANCED_FETCH_INTERVENTION_DONE__ === true",
-            timeout=INTERVENTION_TIMEOUT_SECONDS * 1000,
+            "() => window.__ADVANCED_FETCH_ELICIT_DONE__ === true",
+            timeout=ELICIT_TIMEOUT_SECONDS * 1000,
         )
     )
     close_task = asyncio.create_task(page_closed.wait())
@@ -87,5 +87,5 @@ async def wait_for_intervention_end(page: Page) -> Tuple[str, str, str]:
     except Exception:
         final_url = ""
 
-    logger.info("[Intervention] 结束原因: %s", reason)
+    logger.info("[Elicit] 结束原因: %s", reason)
     return html, final_url, reason

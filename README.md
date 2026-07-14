@@ -42,15 +42,15 @@
 | 参数名 | 类型 | 默认值 | 描述 |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | 必填 | 目标网页的完整 URL 或之前结果的引用 ID（复用抓取结果）。 |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作网站（当且仅当被 captcha / 登录墙阻拦时使用。鉴权信息会保存下来。）。 |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "elicit"` | `"view"` | 操作类型：查看、页面内搜索、LLM 提取、执行 JS 或 请求用户手动操作（当且仅当被 captcha / 登录墙阻拦时使用）。 |
 | `fetch` | `object` | 见下表 | 页面获取方式与等待策略配置。 |
 | `view` | `object` | 见下表 | View 操作配置 |
 | `find` | `object \| null` | `null` | Find 操作配置 |
 | `sampling` | `object \| null` | `null` | Sampling 操作配置 |
 | `eval` | `object \| null` | `null` | Eval 操作配置 |
+| `elicit` | `object \| null` | `null` | Elicit 操作配置 |
 | `cursor` | `integer \| null` | `null` | 继续读取的偏移量。对 view 和 find 操作均有效。 |
 | `max_length` | `integer` | `8000` | 结果最大长度。 |
-| `intervention_message` | `string \| null` | `null` | request_human_action 时，向用户展示的说明文字，解释需要用户做什么。 |
 
 ### 二、`fetch` 对象
 
@@ -96,7 +96,7 @@
 | :--- | :--- |
 | 操作专属配置 | 仅当 `operation` 为对应值时，才可提供 `find`、`sampling` 或 `eval` 对象，且三者互斥。 |
 | `eval` 模式限制 | `operation="eval"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
-| `request_human_action` 模式限制 | `operation="request_human_action"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
+| `elicit` 模式限制 | `operation="elicit"` 时，`fetch.mode` 必须为 `"dynamic"`。 |
 | `max_length` 作用域 | 对 `view`、`find`、`sampling`、`eval` 均生效，限制最终返回结果。 |
 | `cursor` 作用域 | 对 `view` 和 `find` 均有效。用于从上次返回的 `next_cursor` 位置继续读取。 |
 | 续读一致性 | 使用 `cursor` 续读时，填入上次结果的 `refid` 作为 `url` 以复用缓存，确保引用同一份页面快照。 |
@@ -314,14 +314,14 @@ eval:
 
 ```yaml
 url: https://private-site.com
-operation: request_human_action
+  operation: elicit
 fetch:
   mode: dynamic
 ```
 
 ## 会话模式
 
-抓取内网页面时，使用 `operation="request_human_action"` 打开可见浏览器，登录一次后 cookies 会通过 `storage_state.json` 自动保存，后续静默请求（不带 `operation="request_human_action"`）会自动携带登录态。
+抓取内网页面时，使用 `operation="elicit"` 打开可见浏览器，登录一次后 cookies 会通过 `storage_state.json` 自动保存，后续静默请求（不带 `operation="elicit"`）会自动携带登录态。
 
 ## 缓存
 
@@ -366,7 +366,7 @@ fetch:
 - `BROWSER_VIEWPORT_WIDTH`：viewport 宽度。默认 `1440`。
 - `BROWSER_VIEWPORT_HEIGHT`：viewport 高度。默认 `900`。
 - `ENABLE_AUTH_STEALTH`：是否在 `auth` 模式启用 stealth。默认 `true`。
-- `INTERVENTION_TIMEOUT_SECONDS`：用户人工介入等待超时秒数。默认 `600`。
+- `INTERVENTION_TIMEOUT_SECONDS`：用户人工操作等待超时秒数。默认 `600`。
 
 ### 代理
 

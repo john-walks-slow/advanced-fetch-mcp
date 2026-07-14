@@ -65,9 +65,9 @@ def _build_warnings(fetch_result: FetchResult) -> list[str]:
             warnings.append("静态请求超时，已返回当前可得结果。")
         else:
             warnings.append(f"抓取等待在 {stage} 阶段超时，已直接返回当前已加载内容。")
-    if fetch_result.intervention_ended_by == "timeout":
+    if fetch_result.elicit_ended_by == "timeout":
         warnings.append("人工介入等待超时，已返回当前页面内容。")
-    if fetch_result.intervention_ended_by == "page_closed":
+    if fetch_result.elicit_ended_by == "page_closed":
         warnings.append("浏览器页面已关闭，已返回当前可得内容。")
     return warnings
 
@@ -94,8 +94,8 @@ def _build_public_result(
         result["timed_out"] = True
         if fetch_result.timeout_stage:
             result["timeout_stage"] = fetch_result.timeout_stage
-    if fetch_result.intervention_ended_by:
-        result["intervention_ended_by"] = fetch_result.intervention_ended_by
+    if fetch_result.elicit_ended_by:
+        result["elicit_ended_by"] = fetch_result.elicit_ended_by
     if truncated:
         result["truncated"] = True
     if next_cursor is not None:
@@ -127,12 +127,12 @@ async def execute_advanced_fetch(
     request: AdvancedFetchParams,
 ) -> Tuple[Dict[str, Any], bytes | None]:
     url = request.url
-    require_intervention = request.operation == "request_human_action"
+    is_elicit = request.operation == "elicit"
 
-    if require_intervention:
+    if is_elicit:
         try:
             elicit_message = (
-                request.intervention_message
+                (request.elicit.message if request.elicit else None)
                 or "即将打开浏览器手动操作页面，请完成必要操作后关闭浏览器。"
             )
             elicit_result = await ctx.elicit(
@@ -142,7 +142,7 @@ async def execute_advanced_fetch(
                 response_description="点击确认后将在可见浏览器中打开页面供您操作",
             )
             if not isinstance(elicit_result, AcceptedElicitation):
-                logger.info("[Elicit] 用户取消了 request_human_action（%s）", elicit_result.action)
+                logger.info("[Elicit] 用户取消了操作（%s）", elicit_result.action)
                 return {"success": False, "error": "用户取消了手动操作"}, None
         except Exception as exc:
             logger.warning(
@@ -152,7 +152,7 @@ async def execute_advanced_fetch(
     if request.operation == "eval":
         eval_result = await evaluate_script_on_page(
             url=url,
-            require_user_intervention=False,
+            require_elicit=False,
             min_stable_seconds=request.fetch.min_stable_seconds,
             script=request.eval.script if request.eval else "",
             timeout=request.fetch.timeout,
@@ -192,7 +192,7 @@ async def execute_advanced_fetch(
         fetch_result = await fetch_url(
             url,
             request.fetch.mode,
-            require_intervention,
+            is_elicit,
             request.fetch.min_stable_seconds,
             request.fetch.timeout,
             with_screenshot=request.view.with_screenshot,

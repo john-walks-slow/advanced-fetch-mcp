@@ -113,8 +113,8 @@ def get_requests_proxies(url: Optional[str] = None) -> Optional[dict[str, str]]:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_MAX_LENGTH = int(os.getenv("DEFAULT_MAX_LENGTH", env_default("DEFAULT_MAX_LENGTH")))
-INTERVENTION_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", env_default("INTERVENTION_TIMEOUT_SECONDS")))
-INTERVENTION_BUTTON_ID = "advanced-fetch-intervention-done"
+ELICIT_TIMEOUT_SECONDS = int(os.getenv("INTERVENTION_TIMEOUT_SECONDS", env_default("INTERVENTION_TIMEOUT_SECONDS")))
+ELICIT_BUTTON_ID = "advanced-fetch-elicit-done"
 
 FETCH_TIMEOUT_SECONDS = env_float("FETCH_TIMEOUT", float(env_default("FETCH_TIMEOUT")), minimum=1.0)
 PER_SITE_RATE_LIMIT_SECONDS = env_float("PER_SITE_RATE_LIMIT_SECONDS", float(env_default("PER_SITE_RATE_LIMIT_SECONDS")), minimum=0.0)

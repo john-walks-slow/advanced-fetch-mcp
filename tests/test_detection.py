@@ -5,45 +5,45 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from advanced_fetch_mcp.detection import (
-    build_intervention_script,
-    wait_for_intervention_end,
-    INTERVENTION_BUTTON_ID,
+    build_elicit_script,
+    wait_for_elicit_end,
+    ELICIT_BUTTON_ID,
 )
 
 
-class BuildInterventionScriptTests(unittest.TestCase):
+class BuildElicitScriptTests(unittest.TestCase):
     def test_script_contains_button_id(self):
         """脚本应包含正确的 button_id 配置。"""
-        script = build_intervention_script()
-        expected_payload = json.dumps({"button_id": INTERVENTION_BUTTON_ID}, ensure_ascii=False)
+        script = build_elicit_script()
+        expected_payload = json.dumps({"button_id": ELICIT_BUTTON_ID}, ensure_ascii=False)
         self.assertIn(expected_payload, script)
 
     def test_script_contains_button_creation(self):
         """脚本应创建带有正确 ID 的按钮。"""
-        script = build_intervention_script()
+        script = build_elicit_script()
         self.assertIn(f"btn.id = cfg.button_id", script)
         self.assertIn(f"document.getElementById(cfg.button_id)", script)
 
     def test_script_sets_window_flag_on_click(self):
         """点击按钮应设置全局标记。"""
-        script = build_intervention_script()
-        self.assertIn("__ADVANCED_FETCH_INTERVENTION_DONE__", script)
-        self.assertIn("window.__ADVANCED_FETCH_INTERVENTION_DONE__ = true", script)
+        script = build_elicit_script()
+        self.assertIn("__ADVANCED_FETCH_ELICIT_DONE__", script)
+        self.assertIn("window.__ADVANCED_FETCH_ELICIT_DONE__ = true", script)
 
     def test_script_has_fixed_position_styles(self):
         """按钮应有固定定位样式确保可见。"""
-        script = build_intervention_script()
+        script = build_elicit_script()
         self.assertIn("position = 'fixed'", script)
         self.assertIn("zIndex = '2147483647'", script)  # 最高层级
 
     def test_script_handles_dom_content_loaded(self):
         """脚本应处理 DOM 加载状态。"""
-        script = build_intervention_script()
+        script = build_elicit_script()
         self.assertIn("document.readyState === 'loading'", script)
         self.assertIn("DOMContentLoaded", script)
 
 
-class WaitForInterventionEndTests(unittest.IsolatedAsyncioTestCase):
+class WaitForElicitEndTests(unittest.IsolatedAsyncioTestCase):
     async def test_user_marked_ready_returns_correct_reason(self):
         """用户点击完成按钮后应返回 user_marked_ready。"""
         page = MagicMock()
@@ -53,7 +53,7 @@ class WaitForInterventionEndTests(unittest.IsolatedAsyncioTestCase):
         # wait_for_function 成功表示用户点击了完成按钮
         page.wait_for_function = AsyncMock()
 
-        html, final_url, reason = await wait_for_intervention_end(page)
+        html, final_url, reason = await wait_for_elicit_end(page)
 
         self.assertEqual(reason, "user_marked_ready")
         self.assertIn("Done", html)
@@ -69,7 +69,7 @@ class WaitForInterventionEndTests(unittest.IsolatedAsyncioTestCase):
         # 模拟 wait_for_function 超时抛异常
         page.wait_for_function = AsyncMock(side_effect=Exception("Timeout"))
 
-        html, final_url, reason = await wait_for_intervention_end(page)
+        html, final_url, reason = await wait_for_elicit_end(page)
 
         self.assertEqual(reason, "timeout")
         self.assertIn("Partial", html)
@@ -84,7 +84,7 @@ class WaitForInterventionEndTests(unittest.IsolatedAsyncioTestCase):
         # 模拟 wait_for_function 抛异常且页面已关闭
         page.wait_for_function = AsyncMock(side_effect=Exception("Timeout"))
 
-        html, final_url, reason = await wait_for_intervention_end(page)
+        html, final_url, reason = await wait_for_elicit_end(page)
 
         self.assertEqual(reason, "page_closed")
 
@@ -96,7 +96,7 @@ class WaitForInterventionEndTests(unittest.IsolatedAsyncioTestCase):
         page.content = AsyncMock(side_effect=Exception("Page gone"))
         page.url = ""
 
-        html, final_url, reason = await wait_for_intervention_end(page)
+        html, final_url, reason = await wait_for_elicit_end(page)
 
         self.assertEqual(html, "")
         self.assertEqual(final_url, "")

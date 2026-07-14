@@ -22,7 +22,7 @@ class ServerSchemaTests(unittest.TestCase):
         params = list(signature.parameters.keys())
         self.assertEqual(
             params,
-            ["url", "operation", "fetch", "view", "find", "sampling", "eval", "ctx"],
+            ["url", "operation", "fetch", "view", "find", "sampling", "eval", "ctx", "elicit"],
         )
         self.assertNotIn("action", params)
         self.assertNotIn("output_format", params)

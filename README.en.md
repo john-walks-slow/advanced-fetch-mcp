@@ -11,7 +11,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 - **Dynamic website support**: Uses Playwright to fetch dynamic websites and detect when the page becomes stable.
 - **LLM Sampling** (experimental): Use `sampling.prompt` to refine page content and return a condensed result. Supported by VS Code GitHub Copilot, goose, Amp, Glama, Joey, fast-agent, mcp-use, Postman, etc.
 - **Chunked reading for large pages**: Supports `find.query` for searching within a page, and uses `cursor` plus `view.max_length` to continue reading from any position.
-- **Manual intervention and auth**: `operation="request_human_action"` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
+- **Manual interaction and auth**: `operation="elicit"` opens a visible browser so the user can finish login, CAPTCHA, or manual actions before continuing. Once logged in, later requests can reuse the saved auth state.
 - **Anti-bot masking**: Includes Playwright-Stealth to imitate real browser behavior as much as possible and reduce bot detection.
 - **Proxy support**: Supports `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`.
 - **Per-site rate limiting**: Configure `PER_SITE_RATE_LIMIT_SECONDS` to enforce a minimum interval between requests to the same hostname.
@@ -43,15 +43,15 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `url` | `string` | Required | Full URL of the target webpage, or a refid to reuse a previous fetch result. |
-| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "request_human_action"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or request manual intervention (use only when blocked by captcha/login wall; auth info is saved). |
+| `operation` | `"view" \| "find" \| "sampling" \| "eval" \| "elicit"` | `"view"` | Operation: view, in-page search, LLM extraction, JS execution, or elicit (request manual user action, use only when blocked by captcha/login wall). |
 | `fetch` | `object` | See below | Page fetching mode and wait-strategy configuration. |
 | `view` | `object` | See below | View operation configuration. |
 | `find` | `object \| null` | `null` | Find operation configuration. |
 | `sampling` | `object \| null` | `null` | Sampling operation configuration. |
 | `eval` | `object \| null` | `null` | Eval operation configuration. |
+| `elicit` | `object \| null` | `null` | Elicit operation configuration. |
 | `cursor` | `integer \| null` | `null` | Continue-read offset. Valid for both view and find operations. |
 | `max_length` | `integer` | `8000` | Maximum result length. |
-| `intervention_message` | `string \| null` | `null` | When operation=request_human_action, a message shown to the user explaining what action is needed. |
 
 ### 2. `fetch` object
 
@@ -97,7 +97,7 @@ More capable than vanilla fetch, simpler than using Playwright directly.
 | :--- | :--- |
 | Operation-specific config | The `find`, `sampling`, or `eval` object may only be provided when `operation` matches, and they are mutually exclusive. |
 | `eval` mode restriction | When `operation="eval"`, `fetch.mode` must be `"dynamic"`. |
-| `request_human_action` mode restriction | When `operation="request_human_action"`, `fetch.mode` must be `"dynamic"`. |
+| `elicit` mode restriction | When `operation="elicit"`, `fetch.mode` must be `"dynamic"`. |
 | `max_length` scope | Applies to `view`, `find`, `sampling`, and `eval`, limiting the final returned result. |
 | `cursor` scope | Valid for both `view` and `find`. Used to continue reading from a previous `next_cursor` position. |
 | Continue-read consistency | When continuing with `cursor`, use the previous response's `refid` as the `url` to reuse the cache and ensure the same page snapshot. |
@@ -312,14 +312,14 @@ A site that requires login:
 
 ```yaml
 url: https://private-site.com
-operation: request_human_action
+  operation: elicit
 fetch:
   mode: dynamic
 ```
 
 ## Session Modes
 
-To fetch intranet pages, use `operation="request_human_action"` to open a visible browser window. After you log in once, cookies are automatically saved via `storage_state.json`, and subsequent silent requests (without `operation="request_human_action"`) will carry the login state automatically.
+To fetch intranet pages, use `operation="elicit"` to open a visible browser window. After you log in once, cookies are automatically saved via `storage_state.json`, and subsequent silent requests (without `operation="elicit"`) will carry the login state automatically.
 
 ## Cache
 
@@ -364,7 +364,7 @@ Each fetch result generates a `refid`. Pass the `refid` directly as the `url` in
 - `BROWSER_VIEWPORT_WIDTH`: Viewport width. Default: `1440`.
 - `BROWSER_VIEWPORT_HEIGHT`: Viewport height. Default: `900`.
 - `ENABLE_AUTH_STEALTH`: Whether to enable stealth in `auth` mode. Default: `true`.
-- `INTERVENTION_TIMEOUT_SECONDS`: Timeout in seconds for manual user intervention. Default: `600`.
+- `INTERVENTION_TIMEOUT_SECONDS`: Timeout in seconds for manual user action. Default: `600`.
 
 ### Proxy
 

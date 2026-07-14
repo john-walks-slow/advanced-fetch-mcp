@@ -14,7 +14,7 @@ import requests
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from .browser import browser_manager
-from .detection import build_intervention_script, wait_for_intervention_end
+from .detection import build_elicit_script, wait_for_elicit_end
 from .params import FetchMode
 from .extract import render_auto_wait_text
 from .settings import (
@@ -40,7 +40,7 @@ class FetchResult:
     final_url: str
     timed_out: bool = False
     timeout_stage: Optional[TimeoutStage] = None
-    intervention_ended_by: Optional[str] = None
+    elicit_ended_by: Optional[str] = None
     screenshot: Optional[str] = None
 
 
@@ -50,7 +50,7 @@ class EvalResult:
     fetch_result: FetchResult
 
 
-class EvalInterventionClosedError(RuntimeError):
+class EvalElicitClosedError(RuntimeError):
     pass
 
 
@@ -299,7 +299,7 @@ async def _wait_for_content_stable(
 
 async def dynamic_fetch(
     url: str,
-    require_user_intervention: bool = False,
+    require_elicit: bool = False,
     min_stable_seconds: Optional[float] = None,
     timeout: Optional[float] = None,
     with_screenshot: bool = False,
@@ -310,17 +310,17 @@ async def dynamic_fetch(
     page: Optional[Page] = None
     timed_out = False
     timeout_stage: Optional[TimeoutStage] = None
-    intervention_ended_by: Optional[str] = None
+    elicit_ended_by: Optional[str] = None
 
-    headless = not require_user_intervention
+    headless = not require_elicit
 
     async with browser_manager.open_session(
         headless=headless,
-        apply_stealth=not require_user_intervention,
+        apply_stealth=not require_elicit,
     ) as context:
         try:
-            if require_user_intervention:
-                await context.add_init_script(build_intervention_script())
+            if require_elicit:
+                await context.add_init_script(build_elicit_script())
 
             page = await context.new_page()
 
@@ -341,7 +341,7 @@ async def dynamic_fetch(
             except Exception as exc:
                 logger.warning("[DynamicFetch] goto 失败，立即抓取当前内容：%s", exc)
 
-            if goto_completed and not require_user_intervention:
+            if goto_completed and not require_elicit:
                 await _wait_for_content_stable(page, deadline, min_stable_seconds)
 
             # Capture screenshot before page content, if requested
@@ -353,9 +353,9 @@ async def dynamic_fetch(
                 except Exception as exc:
                     logger.warning("[DynamicFetch] 截图失败: %s", exc)
 
-            if require_user_intervention:
-                html, final_url, intervention_ended_by = (
-                    await wait_for_intervention_end(page)
+            if require_elicit:
+                html, final_url, elicit_ended_by = (
+                    await wait_for_elicit_end(page)
                 )
                 if not html:
                     html, final_url = await _capture_current_page(page)
@@ -367,7 +367,7 @@ async def dynamic_fetch(
                 final_url=final_url,
                 timed_out=timed_out,
                 timeout_stage=timeout_stage,
-                intervention_ended_by=intervention_ended_by,
+                elicit_ended_by=elicit_ended_by,
                 screenshot=screenshot,
             )
         finally:
@@ -381,16 +381,16 @@ async def dynamic_fetch(
 async def fetch_url(
     url: str,
     mode: FetchMode,
-    require_user_intervention: bool = False,
+    require_elicit: bool = False,
     min_stable_seconds: Optional[float] = None,
     timeout: Optional[float] = None,
     with_screenshot: bool = False,
 ) -> FetchResult:
     await _wait_for_site_rate_limit(url)
-    if mode == "dynamic" or require_user_intervention:
+    if mode == "dynamic" or require_elicit:
         return await dynamic_fetch(
             url=url,
-            require_user_intervention=require_user_intervention,
+            require_elicit=require_elicit,
             min_stable_seconds=min_stable_seconds,
             timeout=timeout,
             with_screenshot=with_screenshot,
@@ -401,7 +401,7 @@ async def fetch_url(
 async def evaluate_script_on_page(
     *,
     url: str,
-    require_user_intervention: bool,
+    require_elicit: bool,
     min_stable_seconds: Optional[float] = None,
     script: str,
     timeout: Optional[float] = None,
@@ -410,20 +410,20 @@ async def evaluate_script_on_page(
     deadline = time.monotonic() + total_timeout
 
     page: Optional[Page] = None
-    headless = not require_user_intervention
+    headless = not require_elicit
     timed_out = False
     timeout_stage: Optional[TimeoutStage] = None
-    intervention_ended_by: Optional[str] = None
+    elicit_ended_by: Optional[str] = None
 
     await _wait_for_site_rate_limit(url)
 
     async with browser_manager.open_session(
         headless=headless,
-        apply_stealth=not require_user_intervention,
+        apply_stealth=not require_elicit,
     ) as context:
         try:
-            if require_user_intervention:
-                await context.add_init_script(build_intervention_script())
+            if require_elicit:
+                await context.add_init_script(build_elicit_script())
 
             page = await context.new_page()
 
@@ -444,13 +444,13 @@ async def evaluate_script_on_page(
             except Exception as exc:
                 logger.warning("[EvalScript] goto 失败：%s", exc)
 
-            if goto_completed and not require_user_intervention:
+            if goto_completed and not require_elicit:
                 await _wait_for_content_stable(page, deadline, min_stable_seconds)
 
-            if require_user_intervention:
-                _, _, intervention_ended_by = await wait_for_intervention_end(page)
-                if intervention_ended_by == "page_closed":
-                    raise EvalInterventionClosedError(
+            if require_elicit:
+                _, _, elicit_ended_by = await wait_for_elicit_end(page)
+                if elicit_ended_by == "page_closed":
+                    raise EvalElicitClosedError(
                         "浏览器页面已关闭，无法继续执行 eval 脚本。"
                     )
 
@@ -463,7 +463,7 @@ async def evaluate_script_on_page(
                     final_url=final_url,
                     timed_out=timed_out,
                     timeout_stage=timeout_stage,
-                    intervention_ended_by=intervention_ended_by,
+                    elicit_ended_by=elicit_ended_by,
                 ),
             )
         finally:

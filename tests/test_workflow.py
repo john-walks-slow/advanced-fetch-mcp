@@ -317,7 +317,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                             "fetch_result": FetchResult(
                                 html="",
                                 final_url="https://example.com/eval-final",
-                                intervention_ended_by="user_marked_ready",
+                                elicit_ended_by="user_marked_ready",
                             ),
                         },
                     )()
@@ -328,12 +328,12 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
 
         fetch_mock.assert_not_awaited()
         self.assertEqual(result["final_url"], "https://example.com/eval-final")
-        self.assertEqual(result["intervention_ended_by"], "user_marked_ready")
+        self.assertEqual(result["elicit_ended_by"], "user_marked_ready")
 
-    async def test_intervention_metadata_is_exposed(self):
+    async def test_elicit_metadata_is_exposed(self):
         request = AdvancedFetchParams(
             url="https://example.com",
-            operation="request_human_action",
+            operation="elicit",
             fetch={"mode": "dynamic"},
         )
         with (
@@ -343,16 +343,16 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
                     return_value=FetchResult(
                         html="<main>x</main>",
                         final_url="https://example.com/final",
-                        intervention_ended_by="user_marked_ready",
+                        elicit_ended_by="user_marked_ready",
                     )
                 ),
             ),
             patch("advanced_fetch_mcp.workflow.store_cached_fetch", return_value=MOCK_REFID),
         ):
             result, _ = await execute_advanced_fetch(ctx=object(), request=request)
-        self.assertEqual(result["intervention_ended_by"], "user_marked_ready")
+        self.assertEqual(result["elicit_ended_by"], "user_marked_ready")
 
-    async def test_request_human_action_elicit_accepted_proceeds(self):
+    async def test_elicit_accepted_proceeds(self):
         """用户确认 elicit → 继续打开浏览器，正常返回"""
         mock_ctx = AsyncMock()
         mock_ctx.elicit = AsyncMock(
@@ -360,7 +360,7 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         )
         request = AdvancedFetchParams(
             url="https://example.com",
-            operation="request_human_action",
+            operation="elicit",
             fetch={"mode": "dynamic"},
         )
         with (
@@ -387,13 +387,13 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["result"], "Hello")
         self.assertEqual(result["final_url"], "https://example.com/final")
 
-    async def test_request_human_action_elicit_declined_returns_error(self):
+    async def test_elicit_declined_returns_error(self):
         """用户拒绝 elicit → 返回 error，不打开浏览器"""
         mock_ctx = AsyncMock()
         mock_ctx.elicit = AsyncMock(return_value=DeclinedElicitation())
         request = AdvancedFetchParams(
             url="https://example.com",
-            operation="request_human_action",
+            operation="elicit",
             fetch={"mode": "dynamic"},
         )
         with (
@@ -407,13 +407,13 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["success"])
         self.assertIn("取消", result["error"])
 
-    async def test_request_human_action_elicit_cancelled_returns_error(self):
+    async def test_elicit_cancelled_returns_error(self):
         """用户取消 elicit → 返回 error，不打开浏览器"""
         mock_ctx = AsyncMock()
         mock_ctx.elicit = AsyncMock(return_value=CancelledElicitation())
         request = AdvancedFetchParams(
             url="https://example.com",
-            operation="request_human_action",
+            operation="elicit",
             fetch={"mode": "dynamic"},
         )
         with (
@@ -427,12 +427,12 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["success"])
         self.assertIn("取消", result["error"])
 
-    async def test_request_human_action_elicit_not_supported_falls_back(self):
+    async def test_elicit_not_supported_falls_back(self):
         """客户端不支持 elicit → fallback，直接开浏览器（原有行为）"""
         # ctx=object() 没有 elicit 方法，会触发 except 回退
         request = AdvancedFetchParams(
             url="https://example.com",
-            operation="request_human_action",
+            operation="elicit",
             fetch={"mode": "dynamic"},
         )
         with (
